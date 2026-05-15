@@ -13,6 +13,7 @@ import type {
   SystemProfileEnvironment,
   SystemProfileGatewayBinding,
   SystemProfileHealthCheck,
+  SystemProfileHealthCheckRun,
   SystemProfileOpenApiSource,
   SystemProfileRepository,
   SystemProfileServiceClient,
@@ -50,6 +51,14 @@ function textOrDash(value: string | number | null | undefined): string {
   return String(value);
 }
 
+function timeText(value: string | null | undefined): string {
+  if (!value) {
+    return "-";
+  }
+
+  return value;
+}
+
 function StatusBadge({ active }: { active: boolean }) {
   return (
     <span className={active ? "system-profile-badge success" : "system-profile-badge muted"}>
@@ -62,6 +71,18 @@ function PublishedBadge({ published }: { published: boolean }) {
   return (
     <span className={published ? "system-profile-badge success" : "system-profile-badge muted"}>
       {published ? "已发布" : "未发布"}
+    </span>
+  );
+}
+
+function RunStatusBadge({ run }: { run: SystemProfileHealthCheckRun | null }) {
+  if (!run) {
+    return <span className="system-profile-badge muted">未运行</span>;
+  }
+
+  return (
+    <span className={run.status === "success" ? "system-profile-badge success" : "system-profile-badge muted"}>
+      {run.status}
     </span>
   );
 }
@@ -559,7 +580,7 @@ function OperationsSection({
     <section className="system-profile-card system-profile-section">
       <h3>运行治理档案</h3>
       <p className="system-profile-muted">
-        这里只展示健康检查配置和 OpenAPI 来源档案；当前页面不会触发真实探活、不会拉取 OpenAPI，也不会发送告警。
+        这里只展示健康检查配置、最近一次运行结果和 OpenAPI 来源档案；当前页面不会触发真实探活、不会拉取 OpenAPI，也不会发送告警。
       </p>
 
       <div className="system-profile-table-wrap">
@@ -571,17 +592,20 @@ function OperationsSection({
               <th>端点 ID</th>
               <th>检查类型</th>
               <th>期望状态码</th>
-              <th>JSON Path</th>
-              <th>JSON Value</th>
               <th>超时</th>
               <th>间隔</th>
               <th>级别</th>
-              <th>状态</th>
+              <th>启用</th>
+              <th>最近状态</th>
+              <th>最近 HTTP</th>
+              <th>最近延迟</th>
+              <th>最近完成时间</th>
+              <th>最近消息</th>
             </tr>
           </thead>
           <tbody>
             {healthChecks.length === 0 ? (
-              <EmptyRow colSpan={10} />
+              <EmptyRow colSpan={13} />
             ) : (
               healthChecks.map((row) => (
                 <tr key={row.id}>
@@ -589,14 +613,23 @@ function OperationsSection({
                   <td className="system-profile-code">{row.endpoint_id}</td>
                   <td>{row.check_type}</td>
                   <td>{row.expected_status}</td>
-                  <td className="system-profile-code">{row.expected_json_path ?? "-"}</td>
-                  <td className="system-profile-code">{row.expected_json_value ?? "-"}</td>
                   <td>{row.timeout_ms} ms</td>
                   <td>{row.interval_seconds} s</td>
                   <td>{row.severity}</td>
                   <td>
                     <StatusBadge active={row.is_active} />
                   </td>
+                  <td>
+                    <RunStatusBadge run={row.latest_run} />
+                  </td>
+                  <td>{textOrDash(row.latest_run?.http_status)}</td>
+                  <td>
+                    {row.latest_run?.latency_ms === null || row.latest_run?.latency_ms === undefined
+                      ? "-"
+                      : `${row.latest_run.latency_ms} ms`}
+                  </td>
+                  <td>{timeText(row.latest_run?.finished_at)}</td>
+                  <td>{textOrDash(row.latest_run?.message)}</td>
                 </tr>
               ))
             )}
