@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
-import { AppCard } from "../../apps/components/AppCard";
-import { registeredApps } from "../../apps/data/apps";
+import { AppCard } from "../../app-registry/components/AppCard";
+import { registeredApps } from "../../app-registry/data/registeredApps";
 
 export function PortalHomePage() {
   return (

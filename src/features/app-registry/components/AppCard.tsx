@@ -1,4 +1,4 @@
-import type { RegisteredApp } from "../data/apps";
+import type { RegisteredApp } from "../data/registeredApps";
 
 type AppCardProps = {
   app: RegisteredApp;
