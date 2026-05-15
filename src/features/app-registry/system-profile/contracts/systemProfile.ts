@@ -131,6 +131,8 @@ export type SystemProfileServiceClient = {
 export type SystemProfileServicePermission = {
   id: number;
   client_id: number;
+  client_code: string | null;
+  client_name: string | null;
   source_app_code: string;
   target_app_code: string;
   permission_code: string;
