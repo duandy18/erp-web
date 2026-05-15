@@ -118,6 +118,26 @@ export type SystemProfileDependency = {
   is_active: boolean;
 };
 
+export type SystemProfileServiceClient = {
+  id: number;
+  app_code: string;
+  client_code: string;
+  client_name: string;
+  auth_type: string;
+  secret_ref: string | null;
+  is_active: boolean;
+};
+
+export type SystemProfileServicePermission = {
+  id: number;
+  client_id: number;
+  source_app_code: string;
+  target_app_code: string;
+  permission_code: string;
+  description: string;
+  is_active: boolean;
+};
+
 export type AppRegistrySystemProfile = {
   app: SystemProfileApp;
   components: SystemProfileComponent[];
@@ -129,6 +149,8 @@ export type AppRegistrySystemProfile = {
   gateway_bindings: SystemProfileGatewayBinding[];
   outgoing_dependencies: SystemProfileDependency[];
   incoming_dependencies: SystemProfileDependency[];
+  service_clients: SystemProfileServiceClient[];
+  service_permissions: SystemProfileServicePermission[];
 };
 
 export type AppRegistrySystemProfilesResponse = {
