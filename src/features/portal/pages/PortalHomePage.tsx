@@ -1,9 +1,13 @@
 import { Link } from "react-router-dom";
 
 import { AppCard } from "../../app-registry/components/AppCard";
-import { registeredApps } from "../../app-registry/data/registeredApps";
+import { useRegisteredApps } from "../../app-registry/hooks/useRegisteredApps";
+import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
 
 export function PortalHomePage() {
+  const { token } = useSessionRuntime();
+  const { apps, loading, error } = useRegisteredApps(token);
+
   return (
     <div className="page-stack">
       <section className="hero">
@@ -36,8 +40,11 @@ export function PortalHomePage() {
         </div>
       </section>
 
+      {error ? <div className="admin-users-alert danger">{error}</div> : null}
+      {loading ? <div className="admin-users-alert">正在加载应用注册信息…</div> : null}
+
       <section className="grid app-grid">
-        {registeredApps.map((app) => (
+        {apps.map((app) => (
           <AppCard key={app.code} app={app} />
         ))}
       </section>
