@@ -1,18 +1,60 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+
+import type { NavigationPage } from "../../features/iam/contracts/navigation";
+import { useSessionRuntime } from "../../features/iam/runtime/useSessionRuntime";
 
 type AppShellProps = {
   children: ReactNode;
 };
 
-const navItems = [
-  { label: "总控首页", path: "/" },
-  { label: "应用中心", path: "/apps" },
-  { label: "总控驾驶舱", path: "/cockpit" },
-  { label: "登录门面", path: "/login" },
-];
+const getRouteByPageCode = (
+  pageCode: string,
+  routePrefixes: { page_code: string; route_prefix: string }[],
+): string | null => {
+  const matched = routePrefixes.find((item) => item.page_code === pageCode);
+  return matched?.route_prefix ?? null;
+};
 
 export function AppShell({ children }: AppShellProps) {
+  const navigate = useNavigate();
+  const { navigation, user, logout } = useSessionRuntime();
+
+  const routePrefixes = navigation?.route_prefixes ?? [];
+  const pages = navigation?.pages ?? [];
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
+  const renderPage = (page: NavigationPage): ReactNode => {
+    if (!page.show_in_sidebar) {
+      return null;
+    }
+
+    const primaryRoute = getRouteByPageCode(page.code, routePrefixes);
+    const visibleChildren = page.children.filter((child) => child.show_in_sidebar);
+
+    return (
+      <div key={page.code} className="nav-list">
+        {primaryRoute ? (
+          <NavLink
+            to={primaryRoute}
+            className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+            end={primaryRoute === "/"}
+          >
+            {page.name}
+          </NavLink>
+        ) : (
+          <div className="nav-link">{page.name}</div>
+        )}
+
+        {visibleChildren.map((child) => renderPage(child))}
+      </div>
+    );
+  };
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -24,18 +66,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </div>
 
-        <nav className="nav-list">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
-              end={item.path === "/"}
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        <nav className="nav-list">{pages.map((page) => renderPage(page))}</nav>
       </aside>
 
       <main className="main">
@@ -44,7 +75,12 @@ export function AppShell({ children }: AppShellProps) {
             <div className="eyebrow">ERP Platform</div>
             <h1>总控平台</h1>
           </div>
-          <div className="env-badge">local · 5170</div>
+          <div className="topbar-actions">
+            <div className="env-badge">{user?.username ?? "local"} · 5170</div>
+            <button className="button secondary" type="button" onClick={handleLogout}>
+              退出
+            </button>
+          </div>
         </header>
 
         <section className="content">{children}</section>

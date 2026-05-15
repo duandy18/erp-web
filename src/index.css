@@ -332,3 +332,9 @@ input {
 .muted {
   color: #64748b;
 }
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}

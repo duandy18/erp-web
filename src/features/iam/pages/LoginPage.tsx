@@ -1,11 +1,37 @@
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { useSessionRuntime } from "../runtime/useSessionRuntime";
 
 export function LoginPage() {
-  const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+  const { error, login, status } = useSessionRuntime();
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin123");
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const isSubmitting = status === "initializing";
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      navigate("/", { replace: true });
+    }
+  }, [navigate, status]);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setSubmitError(null);
+
+    try {
+      await login(username, password);
+      navigate("/", { replace: true });
+    } catch (currentError) {
+      const message = currentError instanceof Error ? currentError.message : "登录失败";
+      setSubmitError(message);
+    }
   };
 
   return (
@@ -14,8 +40,8 @@ export function LoginPage() {
         <div className="eyebrow">ERP Control Plane</div>
         <h2>统一入口登录门面</h2>
         <p>
-          当前阶段只建立 ERP 登录门面和路由骨架。
-          后续再接 IAM、SSO、系统间授权和审计。
+          当前阶段接入 ERP IAM 登录合同。后续再扩展 SSO、系统间授权、
+          审计中心和跨系统流程追踪。
         </p>
         <div className="feature-list">
           <span>Portal</span>
@@ -33,16 +59,24 @@ export function LoginPage() {
 
         <label>
           用户名
-          <input name="username" placeholder="admin" autoComplete="username" />
+          <input
+            name="username"
+            value={username}
+            placeholder="admin"
+            autoComplete="username"
+            onChange={(event) => setUsername(event.target.value)}
+          />
         </label>
 
         <label>
           密码
           <input
             name="password"
+            value={password}
             type={showPassword ? "text" : "password"}
             placeholder="admin123"
             autoComplete="current-password"
+            onChange={(event) => setPassword(event.target.value)}
           />
         </label>
 
@@ -55,11 +89,13 @@ export function LoginPage() {
           显示密码
         </label>
 
-        <button className="button" type="submit">
-          登录门面占位
+        {(submitError || error) && <p className="muted">{submitError ?? error}</p>}
+
+        <button className="button" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "登录中..." : "登录 ERP 总控平台"}
         </button>
 
-        <p className="muted">真实 IAM 合同后续单独设计，不在本次骨架里硬编码。</p>
+        <p className="muted">默认本地账号：admin / admin123。</p>
       </form>
     </div>
   );
