@@ -1,7 +1,7 @@
 import { AppCard } from "../components/AppCard";
-import { registeredApps } from "../data/apps";
+import { registeredApps } from "../data/registeredApps";
 
-export function AppsPage() {
+export function AppRegistryPage() {
   return (
     <div className="page-stack">
       <section className="page-heading">
