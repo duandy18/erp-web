@@ -8,8 +8,10 @@ import type {
   SystemProfileAppEnvironment,
   SystemProfileComponent,
   SystemProfileDatabase,
+  SystemProfileDependency,
   SystemProfileEndpoint,
   SystemProfileEnvironment,
+  SystemProfileGatewayBinding,
   SystemProfileRepository,
 } from "../system-profile/contracts/systemProfile";
 
@@ -20,6 +22,8 @@ const SECTIONS = [
   { key: "endpoints", label: "端点" },
   { key: "databases", label: "数据库" },
   { key: "repositories", label: "仓库" },
+  { key: "gateway", label: "Gateway" },
+  { key: "dependencies", label: "依赖关系" },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
@@ -44,6 +48,14 @@ function StatusBadge({ active }: { active: boolean }) {
   return (
     <span className={active ? "system-profile-badge success" : "system-profile-badge muted"}>
       {active ? "启用" : "停用"}
+    </span>
+  );
+}
+
+function PublishedBadge({ published }: { published: boolean }) {
+  return (
+    <span className={published ? "system-profile-badge success" : "system-profile-badge muted"}>
+      {published ? "已发布" : "未发布"}
     </span>
   );
 }
@@ -328,6 +340,120 @@ function RepositoriesSection({ rows }: { rows: SystemProfileRepository[] }) {
   );
 }
 
+function GatewaySection({ rows }: { rows: SystemProfileGatewayBinding[] }) {
+  return (
+    <section className="system-profile-card system-profile-section">
+      <h3>Gateway 绑定</h3>
+      <p className="system-profile-muted">
+        这里只展示 Gateway 合同和发布状态；当前页面不会自动生成或发布 Nginx 配置。
+      </p>
+      <div className="system-profile-table-wrap">
+        <table className="system-profile-table">
+          <thead>
+            <tr>
+              <th>环境</th>
+              <th>Web Path</th>
+              <th>API Path</th>
+              <th>Web Upstream</th>
+              <th>API Upstream</th>
+              <th>Rewrite</th>
+              <th>发布</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <EmptyRow colSpan={8} />
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.env_code}</td>
+                  <td className="system-profile-code">{row.web_path}</td>
+                  <td className="system-profile-code">{row.api_path}</td>
+                  <td className="system-profile-code">{row.web_upstream_url ?? "-"}</td>
+                  <td className="system-profile-code">{row.api_upstream_url ?? "-"}</td>
+                  <td>{row.rewrite_mode}</td>
+                  <td>
+                    <PublishedBadge published={row.is_published} />
+                  </td>
+                  <td>
+                    <StatusBadge active={row.is_active} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DependencyTable({
+  rows,
+  title,
+  emptyColSpan,
+}: {
+  rows: SystemProfileDependency[];
+  title: string;
+  emptyColSpan: number;
+}) {
+  return (
+    <div className="system-profile-table-wrap">
+      <h3>{title}</h3>
+      <table className="system-profile-table">
+        <thead>
+          <tr>
+            <th>来源系统</th>
+            <th>目标系统</th>
+            <th>类型</th>
+            <th>说明</th>
+            <th>状态</th>
+            <th>必需</th>
+            <th>启用</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <EmptyRow colSpan={emptyColSpan} />
+          ) : (
+            rows.map((row) => (
+              <tr key={row.id}>
+                <td className="system-profile-code">{row.source_app_code}</td>
+                <td className="system-profile-code">{row.target_app_code}</td>
+                <td>{row.dependency_type}</td>
+                <td>{row.description}</td>
+                <td>{row.status}</td>
+                <td>{boolText(row.is_required)}</td>
+                <td>
+                  <StatusBadge active={row.is_active} />
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function DependenciesSection({
+  outgoing,
+  incoming,
+}: {
+  outgoing: SystemProfileDependency[];
+  incoming: SystemProfileDependency[];
+}) {
+  return (
+    <section className="system-profile-card system-profile-section">
+      <DependencyTable rows={outgoing} title="出站依赖" emptyColSpan={7} />
+      <div className="system-profile-subsection">
+        <DependencyTable rows={incoming} title="入站依赖" emptyColSpan={7} />
+      </div>
+    </section>
+  );
+}
+
 function renderSection(section: SectionKey, profile: AppRegistrySystemProfile) {
   if (section === "overview") {
     return <OverviewSection profile={profile} />;
@@ -354,7 +480,20 @@ function renderSection(section: SectionKey, profile: AppRegistrySystemProfile) {
     return <DatabasesSection rows={profile.databases} />;
   }
 
-  return <RepositoriesSection rows={profile.repositories} />;
+  if (section === "repositories") {
+    return <RepositoriesSection rows={profile.repositories} />;
+  }
+
+  if (section === "gateway") {
+    return <GatewaySection rows={profile.gateway_bindings} />;
+  }
+
+  return (
+    <DependenciesSection
+      outgoing={profile.outgoing_dependencies}
+      incoming={profile.incoming_dependencies}
+    />
+  );
 }
 
 export function SystemAppProfilePage() {

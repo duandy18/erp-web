@@ -223,3 +223,7 @@
     grid-template-columns: 1fr;
   }
 }
+
+.system-profile-subsection {
+  margin-top: 28px;
+}

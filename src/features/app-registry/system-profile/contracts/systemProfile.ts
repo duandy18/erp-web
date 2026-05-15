@@ -93,6 +93,31 @@ export type SystemProfileRepository = {
   is_active: boolean;
 };
 
+export type SystemProfileGatewayBinding = {
+  id: number;
+  app_code: string;
+  env_code: string;
+  web_path: string;
+  api_path: string;
+  web_upstream_url: string | null;
+  api_upstream_url: string | null;
+  rewrite_mode: string;
+  is_published: boolean;
+  published_at: string | null;
+  is_active: boolean;
+};
+
+export type SystemProfileDependency = {
+  id: number;
+  source_app_code: string;
+  target_app_code: string;
+  dependency_type: string;
+  description: string;
+  is_required: boolean;
+  status: string;
+  is_active: boolean;
+};
+
 export type AppRegistrySystemProfile = {
   app: SystemProfileApp;
   components: SystemProfileComponent[];
@@ -101,6 +126,9 @@ export type AppRegistrySystemProfile = {
   endpoints: SystemProfileEndpoint[];
   databases: SystemProfileDatabase[];
   repositories: SystemProfileRepository[];
+  gateway_bindings: SystemProfileGatewayBinding[];
+  outgoing_dependencies: SystemProfileDependency[];
+  incoming_dependencies: SystemProfileDependency[];
 };
 
 export type AppRegistrySystemProfilesResponse = {
