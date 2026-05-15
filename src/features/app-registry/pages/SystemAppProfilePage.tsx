@@ -12,6 +12,8 @@ import type {
   SystemProfileEndpoint,
   SystemProfileEnvironment,
   SystemProfileGatewayBinding,
+  SystemProfileHealthCheck,
+  SystemProfileOpenApiSource,
   SystemProfileRepository,
   SystemProfileServiceClient,
   SystemProfileServicePermission,
@@ -27,6 +29,7 @@ const SECTIONS = [
   { key: "gateway", label: "Gateway" },
   { key: "dependencies", label: "依赖关系" },
   { key: "service-auth", label: "系统授权" },
+  { key: "operations", label: "运行治理" },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
@@ -545,6 +548,103 @@ function ServiceAuthSection({
   );
 }
 
+function OperationsSection({
+  healthChecks,
+  openapiSources,
+}: {
+  healthChecks: SystemProfileHealthCheck[];
+  openapiSources: SystemProfileOpenApiSource[];
+}) {
+  return (
+    <section className="system-profile-card system-profile-section">
+      <h3>运行治理档案</h3>
+      <p className="system-profile-muted">
+        这里只展示健康检查配置和 OpenAPI 来源档案；当前页面不会触发真实探活、不会拉取 OpenAPI，也不会发送告警。
+      </p>
+
+      <div className="system-profile-table-wrap">
+        <h3>健康检查配置</h3>
+        <table className="system-profile-table">
+          <thead>
+            <tr>
+              <th>环境</th>
+              <th>端点 ID</th>
+              <th>检查类型</th>
+              <th>期望状态码</th>
+              <th>JSON Path</th>
+              <th>JSON Value</th>
+              <th>超时</th>
+              <th>间隔</th>
+              <th>级别</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {healthChecks.length === 0 ? (
+              <EmptyRow colSpan={10} />
+            ) : (
+              healthChecks.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.env_code}</td>
+                  <td className="system-profile-code">{row.endpoint_id}</td>
+                  <td>{row.check_type}</td>
+                  <td>{row.expected_status}</td>
+                  <td className="system-profile-code">{row.expected_json_path ?? "-"}</td>
+                  <td className="system-profile-code">{row.expected_json_value ?? "-"}</td>
+                  <td>{row.timeout_ms} ms</td>
+                  <td>{row.interval_seconds} s</td>
+                  <td>{row.severity}</td>
+                  <td>
+                    <StatusBadge active={row.is_active} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="system-profile-subsection">
+        <div className="system-profile-table-wrap">
+          <h3>OpenAPI 来源</h3>
+          <table className="system-profile-table">
+            <thead>
+              <tr>
+                <th>环境</th>
+                <th>端点 ID</th>
+                <th>OpenAPI URL</th>
+                <th>最近拉取</th>
+                <th>Checksum</th>
+                <th>拉取状态</th>
+                <th>启用</th>
+              </tr>
+            </thead>
+            <tbody>
+              {openapiSources.length === 0 ? (
+                <EmptyRow colSpan={7} />
+              ) : (
+                openapiSources.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.env_code}</td>
+                    <td className="system-profile-code">{row.endpoint_id}</td>
+                    <td className="system-profile-code">{row.openapi_url}</td>
+                    <td>{row.last_fetched_at ?? "-"}</td>
+                    <td className="system-profile-code">{row.last_checksum ?? "-"}</td>
+                    <td>{row.last_status}</td>
+                    <td>
+                      <StatusBadge active={row.is_active} />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function renderSection(section: SectionKey, profile: AppRegistrySystemProfile) {
   if (section === "overview") {
     return <OverviewSection profile={profile} />;
@@ -588,10 +688,19 @@ function renderSection(section: SectionKey, profile: AppRegistrySystemProfile) {
     );
   }
 
+  if (section === "service-auth") {
+    return (
+      <ServiceAuthSection
+        clients={profile.service_clients}
+        permissions={profile.service_permissions}
+      />
+    );
+  }
+
   return (
-    <ServiceAuthSection
-      clients={profile.service_clients}
-      permissions={profile.service_permissions}
+    <OperationsSection
+      healthChecks={profile.health_checks}
+      openapiSources={profile.openapi_sources}
     />
   );
 }
