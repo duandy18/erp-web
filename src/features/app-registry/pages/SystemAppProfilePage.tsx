@@ -13,6 +13,8 @@ import type {
   SystemProfileEnvironment,
   SystemProfileGatewayBinding,
   SystemProfileRepository,
+  SystemProfileServiceClient,
+  SystemProfileServicePermission,
 } from "../system-profile/contracts/systemProfile";
 
 const SECTIONS = [
@@ -24,6 +26,7 @@ const SECTIONS = [
   { key: "repositories", label: "仓库" },
   { key: "gateway", label: "Gateway" },
   { key: "dependencies", label: "依赖关系" },
+  { key: "service-auth", label: "系统授权" },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
@@ -454,6 +457,98 @@ function DependenciesSection({
   );
 }
 
+function ServiceAuthSection({
+  clients,
+  permissions,
+}: {
+  clients: SystemProfileServiceClient[];
+  permissions: SystemProfileServicePermission[];
+}) {
+  const clientLabelById = new Map(
+    clients.map((client) => [client.id, client.client_code] as const),
+  );
+
+  return (
+    <section className="system-profile-card system-profile-section">
+      <h3>服务调用身份</h3>
+      <p className="system-profile-muted">
+        这里只展示服务调用身份和系统间权限档案；当前页面不会生成 token，也不会启用真实鉴权。
+      </p>
+
+      <div className="system-profile-table-wrap">
+        <table className="system-profile-table">
+          <thead>
+            <tr>
+              <th>Client Code</th>
+              <th>Client Name</th>
+              <th>所属系统</th>
+              <th>Auth Type</th>
+              <th>Secret Ref</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.length === 0 ? (
+              <EmptyRow colSpan={6} />
+            ) : (
+              clients.map((row) => (
+                <tr key={row.id}>
+                  <td className="system-profile-code">{row.client_code}</td>
+                  <td>{row.client_name}</td>
+                  <td className="system-profile-code">{row.app_code}</td>
+                  <td>{row.auth_type}</td>
+                  <td className="system-profile-code">{row.secret_ref ?? "-"}</td>
+                  <td>
+                    <StatusBadge active={row.is_active} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="system-profile-subsection">
+        <h3>系统间权限档案</h3>
+        <div className="system-profile-table-wrap">
+          <table className="system-profile-table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>来源系统</th>
+                <th>目标系统</th>
+                <th>权限码</th>
+                <th>说明</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              {permissions.length === 0 ? (
+                <EmptyRow colSpan={6} />
+              ) : (
+                permissions.map((row) => (
+                  <tr key={row.id}>
+                    <td className="system-profile-code">
+                      {clientLabelById.get(row.client_id) ?? `client#${row.client_id}`}
+                    </td>
+                    <td className="system-profile-code">{row.source_app_code}</td>
+                    <td className="system-profile-code">{row.target_app_code}</td>
+                    <td className="system-profile-code">{row.permission_code}</td>
+                    <td>{row.description}</td>
+                    <td>
+                      <StatusBadge active={row.is_active} />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function renderSection(section: SectionKey, profile: AppRegistrySystemProfile) {
   if (section === "overview") {
     return <OverviewSection profile={profile} />;
@@ -488,10 +583,19 @@ function renderSection(section: SectionKey, profile: AppRegistrySystemProfile) {
     return <GatewaySection rows={profile.gateway_bindings} />;
   }
 
+  if (section === "dependencies") {
+    return (
+      <DependenciesSection
+        outgoing={profile.outgoing_dependencies}
+        incoming={profile.incoming_dependencies}
+      />
+    );
+  }
+
   return (
-    <DependenciesSection
-      outgoing={profile.outgoing_dependencies}
-      incoming={profile.incoming_dependencies}
+    <ServiceAuthSection
+      clients={profile.service_clients}
+      permissions={profile.service_permissions}
     />
   );
 }
