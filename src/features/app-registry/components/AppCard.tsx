@@ -1,4 +1,4 @@
-import type { RegisteredApp } from "../data/registeredApps";
+import type { RegisteredApp } from "../contracts/appRegistry";
 
 type AppCardProps = {
   app: RegisteredApp;
@@ -20,23 +20,23 @@ export function AppCard({ app }: AppCardProps) {
       <dl className="contract-list">
         <div>
           <dt>Gateway Web</dt>
-          <dd>{app.webPath}</dd>
+          <dd>{app.web_path}</dd>
         </div>
         <div>
           <dt>Gateway API</dt>
-          <dd>{app.apiPath}</dd>
+          <dd>{app.api_path}</dd>
         </div>
         <div>
           <dt>Local Web</dt>
-          <dd>{app.localWebUrl}</dd>
+          <dd>{app.local_web_url}</dd>
         </div>
         <div>
           <dt>Local API</dt>
-          <dd>{app.localApiUrl}</dd>
+          <dd>{app.local_api_url}</dd>
         </div>
       </dl>
 
-      <a className="button secondary" href={app.localWebUrl}>
+      <a className="button secondary" href={app.local_web_url}>
         打开本地系统
       </a>
     </article>
