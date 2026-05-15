@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 
 import type { NavigationPage } from "../../features/iam/contracts/navigation";
 import { useSessionRuntime } from "../../features/iam/runtime/useSessionRuntime";
+import { APP_RUNTIME_ENTRY_LABEL } from "../config";
 
 type AppShellProps = {
   children: ReactNode;
@@ -76,7 +77,9 @@ export function AppShell({ children }: AppShellProps) {
             <h1>总控平台</h1>
           </div>
           <div className="topbar-actions">
-            <div className="env-badge">{user?.username ?? "local"} · 5170</div>
+            <div className="env-badge">
+              {user?.username ?? "local"} · {APP_RUNTIME_ENTRY_LABEL}
+            </div>
             <button className="button secondary" type="button" onClick={handleLogout}>
               退出
             </button>
