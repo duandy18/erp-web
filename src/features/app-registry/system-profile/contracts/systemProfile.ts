@@ -140,6 +140,33 @@ export type SystemProfileServicePermission = {
   is_active: boolean;
 };
 
+export type SystemProfileHealthCheck = {
+  id: number;
+  app_code: string;
+  env_code: string;
+  endpoint_id: number;
+  check_type: string;
+  expected_status: number;
+  expected_json_path: string | null;
+  expected_json_value: string | null;
+  timeout_ms: number;
+  interval_seconds: number;
+  severity: string;
+  is_active: boolean;
+};
+
+export type SystemProfileOpenApiSource = {
+  id: number;
+  app_code: string;
+  env_code: string;
+  endpoint_id: number;
+  openapi_url: string;
+  last_fetched_at: string | null;
+  last_checksum: string | null;
+  last_status: string;
+  is_active: boolean;
+};
+
 export type AppRegistrySystemProfile = {
   app: SystemProfileApp;
   components: SystemProfileComponent[];
@@ -153,6 +180,8 @@ export type AppRegistrySystemProfile = {
   incoming_dependencies: SystemProfileDependency[];
   service_clients: SystemProfileServiceClient[];
   service_permissions: SystemProfileServicePermission[];
+  health_checks: SystemProfileHealthCheck[];
+  openapi_sources: SystemProfileOpenApiSource[];
 };
 
 export type AppRegistrySystemProfilesResponse = {
