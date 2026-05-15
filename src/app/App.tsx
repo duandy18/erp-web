@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { AppRegistryPage } from "../features/app-registry/pages/AppRegistryPage";
+import { SystemAppsPage } from "../features/app-registry/pages/SystemAppsPage";
 import { CockpitPage } from "../features/cockpit/pages/CockpitPage";
 import { LoginPage } from "../features/iam/pages/LoginPage";
 import { SystemUsersPage } from "../features/iam/pages/SystemUsersPage";
@@ -17,6 +18,7 @@ function AuthenticatedRoutes() {
         <Route path="/apps" element={<AppRegistryPage />} />
         <Route path="/cockpit" element={<CockpitPage />} />
         <Route path="/system/users" element={<SystemUsersPage />} />
+        <Route path="/system/apps" element={<SystemAppsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
