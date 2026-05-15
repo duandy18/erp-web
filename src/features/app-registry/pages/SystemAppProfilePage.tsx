@@ -464,10 +464,6 @@ function ServiceAuthSection({
   clients: SystemProfileServiceClient[];
   permissions: SystemProfileServicePermission[];
 }) {
-  const clientLabelById = new Map(
-    clients.map((client) => [client.id, client.client_code] as const),
-  );
-
   return (
     <section className="system-profile-card system-profile-section">
       <h3>服务调用身份</h3>
@@ -529,7 +525,7 @@ function ServiceAuthSection({
                 permissions.map((row) => (
                   <tr key={row.id}>
                     <td className="system-profile-code">
-                      {clientLabelById.get(row.client_id) ?? `client#${row.client_id}`}
+                      {row.client_code ?? `client#${row.client_id}`}
                     </td>
                     <td className="system-profile-code">{row.source_app_code}</td>
                     <td className="system-profile-code">{row.target_app_code}</td>
