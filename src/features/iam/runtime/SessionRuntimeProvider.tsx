@@ -10,6 +10,8 @@ type SessionRuntimeProviderProps = {
   children: ReactNode;
 };
 
+const SHOULD_RESTORE_STORED_SESSION = !import.meta.env.DEV;
+
 const toMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -18,13 +20,21 @@ const toMessage = (error: unknown): string => {
   return "请求失败";
 };
 
-const initialStatus = (): SessionRuntimeStatus => {
-  return readAccessToken() ? "initializing" : "anonymous";
+const readInitialAccessToken = (): string | null => {
+  if (!SHOULD_RESTORE_STORED_SESSION) {
+    clearAccessToken();
+    return null;
+  }
+
+  return readAccessToken();
 };
 
 export function SessionRuntimeProvider({ children }: SessionRuntimeProviderProps) {
-  const [status, setStatus] = useState<SessionRuntimeStatus>(() => initialStatus());
-  const [token, setToken] = useState<string | null>(() => readAccessToken());
+  const [initialAccessToken] = useState<string | null>(() => readInitialAccessToken());
+  const [status, setStatus] = useState<SessionRuntimeStatus>(() =>
+    initialAccessToken ? "initializing" : "anonymous",
+  );
+  const [token, setToken] = useState<string | null>(() => initialAccessToken);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [navigation, setNavigation] = useState<MyNavigationOut | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +110,10 @@ export function SessionRuntimeProvider({ children }: SessionRuntimeProviderProps
   );
 
   useEffect(() => {
+    if (!SHOULD_RESTORE_STORED_SESSION) {
+      return undefined;
+    }
+
     const timeoutId = window.setTimeout(() => {
       void refresh();
     }, 0);
