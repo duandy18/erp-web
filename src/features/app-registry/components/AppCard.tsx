@@ -36,8 +36,8 @@ export function AppCard({ app }: AppCardProps) {
         </div>
       </dl>
 
-      <a className="button secondary" href={app.local_web_url}>
-        打开本地系统
+      <a className="button secondary" href={app.web_path}>
+        进入系统
       </a>
     </article>
   );
