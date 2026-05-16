@@ -1,27 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { fetchSystemProfile } from "../api/systemProfileApi";
-import type { AppRegistrySystemProfile } from "../contracts/systemProfile";
+import { fetchAppRegistryMetadataProfiles } from "../api/appMetadataApi";
+import type { AppRegistryMetadataProfile } from "../contracts/appMetadata";
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
-export function useSystemProfile(token: string | null, appCode: string | undefined) {
-  const [profile, setProfile] = useState<AppRegistrySystemProfile | null>(null);
+export function useAppRegistryMetadata(token: string | null) {
+  const [profiles, setProfiles] = useState<AppRegistryMetadataProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     if (!token) {
-      setProfile(null);
+      setProfiles([]);
       setError("缺少登录凭证");
-      return;
-    }
-
-    if (!appCode) {
-      setProfile(null);
-      setError("缺少应用编码");
       return;
     }
 
@@ -29,15 +23,15 @@ export function useSystemProfile(token: string | null, appCode: string | undefin
     setError(null);
 
     try {
-      const response = await fetchSystemProfile(token, appCode);
-      setProfile(response);
+      const response = await fetchAppRegistryMetadataProfiles(token);
+      setProfiles(Array.isArray(response.profiles) ? response.profiles : []);
     } catch (currentError) {
-      setProfile(null);
-      setError(errorMessage(currentError, "加载系统档案失败"));
+      setProfiles([]);
+      setError(errorMessage(currentError, "加载应用主档信息失败"));
     } finally {
       setLoading(false);
     }
-  }, [appCode, token]);
+  }, [token]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -50,7 +44,7 @@ export function useSystemProfile(token: string | null, appCode: string | undefin
   }, [load]);
 
   return {
-    profile,
+    profiles,
     loading,
     error,
     reload: load,
