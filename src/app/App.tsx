@@ -18,11 +18,6 @@ function AuthenticatedRoutes() {
         <Route path="/system/users" element={<SystemUsersPage />} />
 
         <Route path="/system/apps" element={<SystemAppsPage />} />
-        <Route path="/system/apps/components" element={<SystemAppsPage />} />
-        <Route path="/system/apps/environments" element={<SystemAppsPage />} />
-        <Route path="/system/apps/app-environments" element={<SystemAppsPage />} />
-        <Route path="/system/apps/repositories" element={<SystemAppsPage />} />
-        <Route path="/system/apps/gateway" element={<SystemAppsPage />} />
 
         <Route path="/system/service-auth" element={<SystemServiceAuthPage />} />
         <Route path="/system/service-auth/capabilities" element={<SystemServiceAuthPage />} />
