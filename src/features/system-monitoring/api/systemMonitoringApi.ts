@@ -1,8 +1,13 @@
 import { apiRequest } from "../../../shared/api/httpClient";
 import type {
   SystemMonitoringDatabasesResponse,
+  SystemMonitoringDependenciesResponse,
   SystemMonitoringEndpointsResponse,
+  SystemMonitoringGatewayResponse,
+  SystemMonitoringHealthResponse,
+  SystemMonitoringOpenApiResponse,
   SystemMonitoringOverview,
+  SystemMonitoringServiceAuthResponse,
 } from "../contracts/systemMonitoring";
 
 export function fetchSystemMonitoringOverview(
@@ -25,6 +30,48 @@ export function fetchSystemMonitoringDatabases(
   token: string,
 ): Promise<SystemMonitoringDatabasesResponse> {
   return apiRequest<SystemMonitoringDatabasesResponse>("/admin/system-monitoring/databases", {
+    token,
+  });
+}
+
+export function fetchSystemMonitoringGateway(
+  token: string,
+): Promise<SystemMonitoringGatewayResponse> {
+  return apiRequest<SystemMonitoringGatewayResponse>("/admin/system-monitoring/gateway", {
+    token,
+  });
+}
+
+export function fetchSystemMonitoringDependencies(
+  token: string,
+): Promise<SystemMonitoringDependenciesResponse> {
+  return apiRequest<SystemMonitoringDependenciesResponse>(
+    "/admin/system-monitoring/dependencies",
+    { token },
+  );
+}
+
+export function fetchSystemMonitoringServiceAuth(
+  token: string,
+): Promise<SystemMonitoringServiceAuthResponse> {
+  return apiRequest<SystemMonitoringServiceAuthResponse>(
+    "/admin/system-monitoring/service-auth",
+    { token },
+  );
+}
+
+export function fetchSystemMonitoringOpenApi(
+  token: string,
+): Promise<SystemMonitoringOpenApiResponse> {
+  return apiRequest<SystemMonitoringOpenApiResponse>("/admin/system-monitoring/openapi", {
+    token,
+  });
+}
+
+export function fetchSystemMonitoringHealth(
+  token: string,
+): Promise<SystemMonitoringHealthResponse> {
+  return apiRequest<SystemMonitoringHealthResponse>("/admin/system-monitoring/health", {
     token,
   });
 }
