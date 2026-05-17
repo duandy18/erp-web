@@ -58,3 +58,32 @@ export type SystemMonitoringEndpointStatus = {
 export type SystemMonitoringEndpointsResponse = {
   endpoints: SystemMonitoringEndpointStatus[];
 };
+
+export type SystemMonitoringDatabaseStatus = {
+  app_code: string;
+  app_name: string;
+  env_code: string;
+  database_id: number;
+  db_engine: string;
+  db_host_label: string;
+  db_port: number;
+  db_name: string;
+  schema_name: string;
+  migration_tool: string | null;
+  migration_command: string | null;
+  access_policy: string;
+  database_active: boolean;
+  health_endpoint_id: number | null;
+  health_url: string | null;
+  health_endpoint_active: boolean;
+  health_check_id: number | null;
+  status: SystemMonitoringStatus;
+  http_status: number | null;
+  latency_ms: number | null;
+  latest_checked_at: string | null;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringDatabasesResponse = {
+  databases: SystemMonitoringDatabaseStatus[];
+};
