@@ -3,9 +3,11 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
 import type {
   SystemMonitoringAppStatus,
+  SystemMonitoringEndpointStatus,
   SystemMonitoringOverview,
   SystemMonitoringStatus,
 } from "../contracts/systemMonitoring";
+import { useSystemMonitoringEndpoints } from "../hooks/useSystemMonitoringEndpoints";
 import { useSystemMonitoringOverview } from "../hooks/useSystemMonitoringOverview";
 
 type MonitoringTabKey =
@@ -64,6 +66,14 @@ function StatusPill({ status }: { status: SystemMonitoringStatus }) {
   return <span className={statusClassName(status)}>{STATUS_LABELS[status]}</span>;
 }
 
+function BoolPill({ active }: { active: boolean }) {
+  return (
+    <span className={active ? "admin-apps-status success" : "admin-apps-status muted"}>
+      {active ? "启用" : "停用"}
+    </span>
+  );
+}
+
 function formatDateTime(value: string | null): string {
   if (!value) {
     return "暂无";
@@ -77,6 +87,14 @@ function formatDateTime(value: string | null): string {
   return parsed.toLocaleString("zh-CN", {
     hour12: false,
   });
+}
+
+function emptyText(value: string | number | null): string {
+  if (value === null) {
+    return "-";
+  }
+
+  return String(value);
 }
 
 function SummaryCard({
@@ -105,7 +123,11 @@ function MonitoringOverviewCards({ overview }: { overview: SystemMonitoringOverv
       <SummaryCard label="应用总数" value={summary.app_count} hint="ERP 当前纳管的注册应用数量。" />
       <SummaryCard label="正常" value={summary.normal_count} hint="所有关键状态均正常的应用。" />
       <SummaryCard label="待完善" value={summary.warning_count} hint="存在授权、依赖或配置待完善的应用。" />
-      <SummaryCard label="异常 / 未检查" value={summary.error_count + summary.unchecked_count} hint="需要继续检查或处理的应用。" />
+      <SummaryCard
+        label="异常 / 未检查"
+        value={summary.error_count + summary.unchecked_count}
+        hint="需要继续检查或处理的应用。"
+      />
     </section>
   );
 }
@@ -156,9 +178,7 @@ function MonitoringOverviewTable({ rows }: { rows: SystemMonitoringAppStatus[] }
                 <td>
                   <div className="admin-apps-code">{row.app_code}</div>
                   <div>{row.app_name}</div>
-                  <span className={row.is_active ? "admin-apps-status success" : "admin-apps-status muted"}>
-                    {row.is_active ? "启用" : "停用"}
-                  </span>
+                  <BoolPill active={row.is_active} />
                 </td>
                 <td>
                   <div>{row.web_path}</div>
@@ -216,21 +236,139 @@ function MonitoringOverviewContent({
   );
 }
 
-function MonitoringTabContent({
-  activeTab,
-  overview,
+function EmptyEndpoints() {
+  return (
+    <section className="card">
+      <h3>暂无 API 状态数据</h3>
+      <p>当前没有可展示的 API 端点状态。</p>
+    </section>
+  );
+}
+
+function MonitoringEndpointsTable({ rows }: { rows: SystemMonitoringEndpointStatus[] }) {
+  if (rows.length === 0) {
+    return <EmptyEndpoints />;
+  }
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-table-header">
+        <div>
+          <h2>API 状态</h2>
+          <p>只读展示每个注册应用的 API 端点、Health 端点和最近一次 Health 检查结果。</p>
+        </div>
+      </div>
+
+      <div className="admin-apps-table-wrap">
+        <table className="admin-apps-table">
+          <thead>
+            <tr>
+              <th>应用</th>
+              <th>环境</th>
+              <th>API URL</th>
+              <th>Health URL</th>
+              <th>API 启用</th>
+              <th>Health 启用</th>
+              <th>检查状态</th>
+              <th>HTTP</th>
+              <th>耗时</th>
+              <th>最近检查</th>
+              <th>问题摘要</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.app_code}>
+                <td>
+                  <div className="admin-apps-code">{row.app_code}</div>
+                  <div>{row.app_name}</div>
+                </td>
+                <td>{row.env_code ?? "-"}</td>
+                <td>
+                  <div>{row.api_url ?? "-"}</div>
+                  <div className="admin-apps-muted">ID: {emptyText(row.api_endpoint_id)}</div>
+                </td>
+                <td>
+                  <div>{row.health_url ?? "-"}</div>
+                  <div className="admin-apps-muted">ID: {emptyText(row.health_endpoint_id)}</div>
+                </td>
+                <td>
+                  <BoolPill active={row.api_endpoint_active} />
+                </td>
+                <td>
+                  <BoolPill active={row.health_endpoint_active} />
+                </td>
+                <td>
+                  <StatusPill status={row.status} />
+                </td>
+                <td>{emptyText(row.http_status)}</td>
+                <td>{row.latency_ms === null ? "-" : `${row.latency_ms} ms`}</td>
+                <td>{formatDateTime(row.latest_checked_at)}</td>
+                <td>{row.issue_summary ?? "无"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function MonitoringEndpointsContent({
+  rows,
   loading,
   error,
 }: {
-  activeTab: MonitoringTabKey;
-  overview: SystemMonitoringOverview | null;
+  rows: SystemMonitoringEndpointStatus[];
   loading: boolean;
   error: string | null;
+}) {
+  return (
+    <div className="admin-apps-stack">
+      {error ? <div className="admin-apps-alert danger">{error}</div> : null}
+      {loading ? <div className="admin-apps-alert">正在加载 API 状态…</div> : null}
+      {!loading && !error ? <MonitoringEndpointsTable rows={rows} /> : null}
+    </div>
+  );
+}
+
+function MonitoringTabContent({
+  activeTab,
+  overview,
+  overviewLoading,
+  overviewError,
+  endpointRows,
+  endpointsLoading,
+  endpointsError,
+}: {
+  activeTab: MonitoringTabKey;
+  overview: SystemMonitoringOverview | null;
+  overviewLoading: boolean;
+  overviewError: string | null;
+  endpointRows: SystemMonitoringEndpointStatus[];
+  endpointsLoading: boolean;
+  endpointsError: string | null;
 }) {
   const title = monitoringTitle(activeTab);
 
   if (activeTab === "overview") {
-    return <MonitoringOverviewContent overview={overview} loading={loading} error={error} />;
+    return (
+      <MonitoringOverviewContent
+        overview={overview}
+        loading={overviewLoading}
+        error={overviewError}
+      />
+    );
+  }
+
+  if (activeTab === "endpoints") {
+    return (
+      <MonitoringEndpointsContent
+        rows={endpointRows}
+        loading={endpointsLoading}
+        error={endpointsError}
+      />
+    );
   }
 
   return (
@@ -245,7 +383,16 @@ export function SystemMonitoringPage() {
   const location = useLocation();
   const activeTab = getActiveTab(location.pathname);
   const { token } = useSessionRuntime();
-  const { overview, loading, error } = useSystemMonitoringOverview(token);
+  const {
+    overview,
+    loading: overviewLoading,
+    error: overviewError,
+  } = useSystemMonitoringOverview(token);
+  const {
+    endpoints,
+    loading: endpointsLoading,
+    error: endpointsError,
+  } = useSystemMonitoringEndpoints(token, activeTab === "endpoints");
 
   return (
     <div className="page-stack">
@@ -272,7 +419,15 @@ export function SystemMonitoringPage() {
         </div>
       </section>
 
-      <MonitoringTabContent activeTab={activeTab} overview={overview} loading={loading} error={error} />
+      <MonitoringTabContent
+        activeTab={activeTab}
+        overview={overview}
+        overviewLoading={overviewLoading}
+        overviewError={overviewError}
+        endpointRows={endpoints}
+        endpointsLoading={endpointsLoading}
+        endpointsError={endpointsError}
+      />
     </div>
   );
 }

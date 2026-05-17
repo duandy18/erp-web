@@ -36,3 +36,25 @@ export type SystemMonitoringOverview = {
   summary: SystemMonitoringSummary;
   apps: SystemMonitoringAppStatus[];
 };
+
+export type SystemMonitoringEndpointStatus = {
+  app_code: string;
+  app_name: string;
+  env_code: string | null;
+  api_endpoint_id: number | null;
+  health_endpoint_id: number | null;
+  api_url: string | null;
+  health_url: string | null;
+  api_endpoint_active: boolean;
+  health_endpoint_active: boolean;
+  health_check_id: number | null;
+  status: SystemMonitoringStatus;
+  http_status: number | null;
+  latency_ms: number | null;
+  latest_checked_at: string | null;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringEndpointsResponse = {
+  endpoints: SystemMonitoringEndpointStatus[];
+};
