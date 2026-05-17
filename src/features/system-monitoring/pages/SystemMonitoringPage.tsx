@@ -3,10 +3,12 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
 import type {
   SystemMonitoringAppStatus,
+  SystemMonitoringDatabaseStatus,
   SystemMonitoringEndpointStatus,
   SystemMonitoringOverview,
   SystemMonitoringStatus,
 } from "../contracts/systemMonitoring";
+import { useSystemMonitoringDatabases } from "../hooks/useSystemMonitoringDatabases";
 import { useSystemMonitoringEndpoints } from "../hooks/useSystemMonitoringEndpoints";
 import { useSystemMonitoringOverview } from "../hooks/useSystemMonitoringOverview";
 
@@ -332,6 +334,113 @@ function MonitoringEndpointsContent({
   );
 }
 
+function EmptyDatabases() {
+  return (
+    <section className="card">
+      <h3>暂无数据库状态数据</h3>
+      <p>当前没有可展示的数据库状态。</p>
+    </section>
+  );
+}
+
+function MonitoringDatabasesTable({ rows }: { rows: SystemMonitoringDatabaseStatus[] }) {
+  if (rows.length === 0) {
+    return <EmptyDatabases />;
+  }
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-table-header">
+        <div>
+          <h2>数据库状态</h2>
+          <p>只读展示数据库登记信息、DB Health 端点和最近一次 DB Health 检查结果。</p>
+        </div>
+      </div>
+
+      <div className="admin-apps-table-wrap">
+        <table className="admin-apps-table">
+          <thead>
+            <tr>
+              <th>应用</th>
+              <th>环境</th>
+              <th>数据库</th>
+              <th>Schema</th>
+              <th>迁移</th>
+              <th>访问策略</th>
+              <th>登记启用</th>
+              <th>DB Health URL</th>
+              <th>Health 启用</th>
+              <th>检查状态</th>
+              <th>HTTP</th>
+              <th>耗时</th>
+              <th>最近检查</th>
+              <th>问题摘要</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.app_code}-${row.database_id}`}>
+                <td>
+                  <div className="admin-apps-code">{row.app_code}</div>
+                  <div>{row.app_name}</div>
+                </td>
+                <td>{row.env_code}</td>
+                <td>
+                  <div>{row.db_engine}</div>
+                  <div className="admin-apps-muted">
+                    {row.db_host_label}:{row.db_port}/{row.db_name}
+                  </div>
+                </td>
+                <td>{row.schema_name}</td>
+                <td>
+                  <div>{row.migration_tool ?? "-"}</div>
+                  <div className="admin-apps-muted">{row.migration_command ?? "-"}</div>
+                </td>
+                <td>{row.access_policy}</td>
+                <td>
+                  <BoolPill active={row.database_active} />
+                </td>
+                <td>
+                  <div>{row.health_url ?? "-"}</div>
+                  <div className="admin-apps-muted">ID: {emptyText(row.health_endpoint_id)}</div>
+                </td>
+                <td>
+                  <BoolPill active={row.health_endpoint_active} />
+                </td>
+                <td>
+                  <StatusPill status={row.status} />
+                </td>
+                <td>{emptyText(row.http_status)}</td>
+                <td>{row.latency_ms === null ? "-" : `${row.latency_ms} ms`}</td>
+                <td>{formatDateTime(row.latest_checked_at)}</td>
+                <td>{row.issue_summary ?? "无"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function MonitoringDatabasesContent({
+  rows,
+  loading,
+  error,
+}: {
+  rows: SystemMonitoringDatabaseStatus[];
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="admin-apps-stack">
+      {error ? <div className="admin-apps-alert danger">{error}</div> : null}
+      {loading ? <div className="admin-apps-alert">正在加载数据库状态…</div> : null}
+      {!loading && !error ? <MonitoringDatabasesTable rows={rows} /> : null}
+    </div>
+  );
+}
+
 function MonitoringTabContent({
   activeTab,
   overview,
@@ -340,6 +449,9 @@ function MonitoringTabContent({
   endpointRows,
   endpointsLoading,
   endpointsError,
+  databaseRows,
+  databasesLoading,
+  databasesError,
 }: {
   activeTab: MonitoringTabKey;
   overview: SystemMonitoringOverview | null;
@@ -348,6 +460,9 @@ function MonitoringTabContent({
   endpointRows: SystemMonitoringEndpointStatus[];
   endpointsLoading: boolean;
   endpointsError: string | null;
+  databaseRows: SystemMonitoringDatabaseStatus[];
+  databasesLoading: boolean;
+  databasesError: string | null;
 }) {
   const title = monitoringTitle(activeTab);
 
@@ -367,6 +482,16 @@ function MonitoringTabContent({
         rows={endpointRows}
         loading={endpointsLoading}
         error={endpointsError}
+      />
+    );
+  }
+
+  if (activeTab === "databases") {
+    return (
+      <MonitoringDatabasesContent
+        rows={databaseRows}
+        loading={databasesLoading}
+        error={databasesError}
       />
     );
   }
@@ -393,6 +518,11 @@ export function SystemMonitoringPage() {
     loading: endpointsLoading,
     error: endpointsError,
   } = useSystemMonitoringEndpoints(token, activeTab === "endpoints");
+  const {
+    databases,
+    loading: databasesLoading,
+    error: databasesError,
+  } = useSystemMonitoringDatabases(token, activeTab === "databases");
 
   return (
     <div className="page-stack">
@@ -427,6 +557,9 @@ export function SystemMonitoringPage() {
         endpointRows={endpoints}
         endpointsLoading={endpointsLoading}
         endpointsError={endpointsError}
+        databaseRows={databases}
+        databasesLoading={databasesLoading}
+        databasesError={databasesError}
       />
     </div>
   );
