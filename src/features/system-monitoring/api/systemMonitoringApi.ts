@@ -1,5 +1,6 @@
 import { apiRequest } from "../../../shared/api/httpClient";
 import type {
+  SystemMonitoringCheckResult,
   SystemMonitoringDatabasesResponse,
   SystemMonitoringDependenciesResponse,
   SystemMonitoringEndpointsResponse,
@@ -83,6 +84,71 @@ export function runSystemMonitoringHealthCheck(
 ): Promise<SystemMonitoringHealthCheckRun> {
   return apiRequest<SystemMonitoringHealthCheckRun>(
     `/admin/app-registry/health-checks/${healthCheckId}/run`,
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function checkSystemMonitoringGateway(
+  token: string,
+  bindingId: number,
+): Promise<SystemMonitoringCheckResult> {
+  return apiRequest<SystemMonitoringCheckResult>(
+    `/admin/system-monitoring/gateway/${bindingId}/check`,
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function checkSystemMonitoringDependency(
+  token: string,
+  dependencyId: number,
+): Promise<SystemMonitoringCheckResult> {
+  return apiRequest<SystemMonitoringCheckResult>(
+    `/admin/system-monitoring/dependencies/${dependencyId}/check`,
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function checkSystemMonitoringServiceClient(
+  token: string,
+  clientId: number,
+): Promise<SystemMonitoringCheckResult> {
+  return apiRequest<SystemMonitoringCheckResult>(
+    `/admin/system-monitoring/service-auth/clients/${clientId}/check`,
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function checkSystemMonitoringServicePermission(
+  token: string,
+  permissionId: number,
+): Promise<SystemMonitoringCheckResult> {
+  return apiRequest<SystemMonitoringCheckResult>(
+    `/admin/system-monitoring/service-auth/permissions/${permissionId}/check`,
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function checkSystemMonitoringOpenApi(
+  token: string,
+  sourceId: number,
+): Promise<SystemMonitoringCheckResult> {
+  return apiRequest<SystemMonitoringCheckResult>(
+    `/admin/system-monitoring/openapi/${sourceId}/check`,
     {
       method: "POST",
       token,

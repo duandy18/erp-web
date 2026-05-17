@@ -3,7 +3,14 @@ import { useCallback, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 
 import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
-import { runSystemMonitoringHealthCheck } from "../api/systemMonitoringApi";
+import {
+  checkSystemMonitoringDependency,
+  checkSystemMonitoringGateway,
+  checkSystemMonitoringOpenApi,
+  checkSystemMonitoringServiceClient,
+  checkSystemMonitoringServicePermission,
+  runSystemMonitoringHealthCheck,
+} from "../api/systemMonitoringApi";
 import type {
   SystemMonitoringAppStatus,
   SystemMonitoringDatabaseStatus,
@@ -39,10 +46,22 @@ type MonitoringTabKey =
 
 type ReloadHandler = () => Promise<void>;
 
-type RunHealthCheckHandler = (
-  healthCheckId: number,
-  afterRun: ReloadHandler,
-) => Promise<void>;
+type CheckResultLike = {
+  status: string;
+  message?: string | null;
+};
+
+type CheckTask = {
+  key: string;
+  run: (token: string) => Promise<CheckResultLike>;
+};
+
+type ExecuteCheckTasksArgs = {
+  tab: MonitoringTabKey;
+  label: string;
+  tasks: CheckTask[];
+  afterRun: ReloadHandler;
+};
 
 const MONITORING_TABS: { key: MonitoringTabKey; label: string; path: string }[] = [
   { key: "overview", label: "应用运行总览", path: "/system/monitoring" },
@@ -122,6 +141,18 @@ function toErrorMessage(error: unknown): string {
   }
 
   return "执行检查失败";
+}
+
+function classifyResultStatus(status: string): "ok" | "warning" | "error" {
+  if (status === "ok" || status === "success") {
+    return "ok";
+  }
+
+  if (status === "error" || status === "timeout" || status === "failure") {
+    return "error";
+  }
+
+  return "warning";
 }
 
 function TableShell({
@@ -214,32 +245,49 @@ function RefreshButton({
   );
 }
 
-function RunHealthCheckButton({
-  healthCheckId,
-  runningHealthCheckId,
-  onRun,
-  reloadAfterRun,
+function CheckButton({
+  onCheck,
+  disabled,
+  checking,
 }: {
-  healthCheckId: number | null;
-  runningHealthCheckId: number | null;
-  onRun: RunHealthCheckHandler;
-  reloadAfterRun: ReloadHandler;
+  onCheck: () => Promise<void>;
+  disabled: boolean;
+  checking: boolean;
 }) {
-  const running = healthCheckId !== null && runningHealthCheckId === healthCheckId;
-
   return (
     <button
       className="admin-apps-button secondary"
-      disabled={healthCheckId === null || running}
+      disabled={disabled || checking}
       type="button"
       onClick={() => {
-        if (healthCheckId !== null) {
-          void onRun(healthCheckId, reloadAfterRun);
-        }
+        void onCheck();
       }}
     >
-      {running ? "检查中…" : "执行检查"}
+      {checking ? "检查中…" : "检查"}
     </button>
+  );
+}
+
+function TabActions({
+  onRefresh,
+  refreshDisabled,
+  onCheck,
+  checkDisabled = false,
+  checking = false,
+}: {
+  onRefresh: ReloadHandler;
+  refreshDisabled: boolean;
+  onCheck?: () => Promise<void>;
+  checkDisabled?: boolean;
+  checking?: boolean;
+}) {
+  return (
+    <>
+      <RefreshButton disabled={refreshDisabled || checking} onRefresh={onRefresh} />
+      {onCheck ? (
+        <CheckButton disabled={checkDisabled || refreshDisabled} checking={checking} onCheck={onCheck} />
+      ) : null}
+    </>
   );
 }
 
@@ -292,7 +340,7 @@ function MonitoringOverviewTable({
     <TableShell
       title="应用运行总览"
       description="只读展示各独立系统入口、API、DB、Gateway、OpenAPI、Service Auth 和依赖状态。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={<TabActions refreshDisabled={refreshDisabled} onRefresh={onRefresh} />}
     >
       <table className="admin-apps-table">
         <thead>
@@ -368,24 +416,34 @@ function MonitoringEndpointsTable({
   rows,
   onRefresh,
   refreshDisabled,
-  onRunHealthCheck,
-  runningHealthCheckId,
+  onCheck,
+  checking,
 }: {
   rows: SystemMonitoringEndpointStatus[];
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
-  onRunHealthCheck: RunHealthCheckHandler;
-  runningHealthCheckId: number | null;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyCard title="暂无 API 状态数据" description="当前没有可展示的 API 端点状态。" />;
   }
 
+  const hasCheckTargets = rows.some((row) => row.health_check_id !== null);
+
   return (
     <TableShell
       title="API 状态"
       description="只读展示每个注册应用的 API 端点、Health 端点和最近一次 Health 检查结果。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={
+        <TabActions
+          checkDisabled={!hasCheckTargets}
+          checking={checking}
+          onCheck={onCheck}
+          onRefresh={onRefresh}
+          refreshDisabled={refreshDisabled}
+        />
+      }
     >
       <table className="admin-apps-table">
         <thead>
@@ -401,7 +459,6 @@ function MonitoringEndpointsTable({
             <th>耗时</th>
             <th>最近检查</th>
             <th>问题摘要</th>
-            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -427,14 +484,6 @@ function MonitoringEndpointsTable({
               <td>{row.latency_ms === null ? "-" : `${row.latency_ms} ms`}</td>
               <td>{formatDateTime(row.latest_checked_at)}</td>
               <td>{row.issue_summary ?? "无"}</td>
-              <td>
-                <RunHealthCheckButton
-                  healthCheckId={row.health_check_id}
-                  onRun={onRunHealthCheck}
-                  reloadAfterRun={onRefresh}
-                  runningHealthCheckId={runningHealthCheckId}
-                />
-              </td>
             </tr>
           ))}
         </tbody>
@@ -447,24 +496,34 @@ function MonitoringDatabasesTable({
   rows,
   onRefresh,
   refreshDisabled,
-  onRunHealthCheck,
-  runningHealthCheckId,
+  onCheck,
+  checking,
 }: {
   rows: SystemMonitoringDatabaseStatus[];
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
-  onRunHealthCheck: RunHealthCheckHandler;
-  runningHealthCheckId: number | null;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyCard title="暂无数据库状态数据" description="当前没有可展示的数据库状态。" />;
   }
 
+  const hasCheckTargets = rows.some((row) => row.health_check_id !== null);
+
   return (
     <TableShell
       title="数据库状态"
       description="只读展示数据库登记信息、DB Health 端点和最近一次 DB Health 检查结果。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={
+        <TabActions
+          checkDisabled={!hasCheckTargets}
+          checking={checking}
+          onCheck={onCheck}
+          onRefresh={onRefresh}
+          refreshDisabled={refreshDisabled}
+        />
+      }
     >
       <table className="admin-apps-table">
         <thead>
@@ -483,7 +542,6 @@ function MonitoringDatabasesTable({
             <th>耗时</th>
             <th>最近检查</th>
             <th>问题摘要</th>
-            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -517,14 +575,6 @@ function MonitoringDatabasesTable({
               <td>{row.latency_ms === null ? "-" : `${row.latency_ms} ms`}</td>
               <td>{formatDateTime(row.latest_checked_at)}</td>
               <td>{row.issue_summary ?? "无"}</td>
-              <td>
-                <RunHealthCheckButton
-                  healthCheckId={row.health_check_id}
-                  onRun={onRunHealthCheck}
-                  reloadAfterRun={onRefresh}
-                  runningHealthCheckId={runningHealthCheckId}
-                />
-              </td>
             </tr>
           ))}
         </tbody>
@@ -537,10 +587,14 @@ function MonitoringGatewayTable({
   rows,
   onRefresh,
   refreshDisabled,
+  onCheck,
+  checking,
 }: {
   rows: SystemMonitoringGatewayBinding[];
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyCard title="暂无 Gateway 状态数据" description="当前没有可展示的 Gateway 绑定。" />;
@@ -550,7 +604,15 @@ function MonitoringGatewayTable({
     <TableShell
       title="Gateway 状态"
       description="只读展示各应用 Gateway Web/API 路径与上游配置。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={
+        <TabActions
+          checkDisabled={rows.length === 0}
+          checking={checking}
+          onCheck={onCheck}
+          onRefresh={onRefresh}
+          refreshDisabled={refreshDisabled}
+        />
+      }
     >
       <table className="admin-apps-table">
         <thead>
@@ -599,10 +661,14 @@ function MonitoringDependenciesTable({
   rows,
   onRefresh,
   refreshDisabled,
+  onCheck,
+  checking,
 }: {
   rows: SystemMonitoringDependency[];
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyCard title="暂无系统依赖数据" description="当前没有可展示的系统依赖。" />;
@@ -612,7 +678,15 @@ function MonitoringDependenciesTable({
     <TableShell
       title="系统依赖状态"
       description="只读展示各独立系统之间的依赖关系和状态。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={
+        <TabActions
+          checkDisabled={rows.length === 0}
+          checking={checking}
+          onCheck={onCheck}
+          onRefresh={onRefresh}
+          refreshDisabled={refreshDisabled}
+        />
+      }
     >
       <table className="admin-apps-table">
         <thead>
@@ -658,17 +732,31 @@ function MonitoringServiceAuthTables({
   data,
   onRefresh,
   refreshDisabled,
+  onCheck,
+  checking,
 }: {
   data: SystemMonitoringServiceAuthResponse;
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
+  const hasCheckTargets = data.clients.length > 0 || data.permissions.length > 0;
+
   return (
     <div className="admin-apps-stack">
       <TableShell
         title="Service Clients"
         description="只读展示各系统登记的 service client。"
-        actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+        actions={
+          <TabActions
+            checkDisabled={!hasCheckTargets}
+            checking={checking}
+            onCheck={onCheck}
+            onRefresh={onRefresh}
+            refreshDisabled={refreshDisabled}
+          />
+        }
       >
         <table className="admin-apps-table">
           <thead>
@@ -751,10 +839,14 @@ function MonitoringOpenApiTable({
   rows,
   onRefresh,
   refreshDisabled,
+  onCheck,
+  checking,
 }: {
   rows: SystemMonitoringOpenApiSource[];
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyCard title="暂无 OpenAPI 数据" description="当前没有可展示的 OpenAPI 来源。" />;
@@ -764,7 +856,15 @@ function MonitoringOpenApiTable({
     <TableShell
       title="OpenAPI 合同状态"
       description="只读展示各应用 OpenAPI 来源和最近拉取状态。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={
+        <TabActions
+          checkDisabled={rows.length === 0}
+          checking={checking}
+          onCheck={onCheck}
+          onRefresh={onRefresh}
+          refreshDisabled={refreshDisabled}
+        />
+      }
     >
       <table className="admin-apps-table">
         <thead>
@@ -809,14 +909,14 @@ function MonitoringHealthTable({
   rows,
   onRefresh,
   refreshDisabled,
-  onRunHealthCheck,
-  runningHealthCheckId,
+  onCheck,
+  checking,
 }: {
   rows: SystemMonitoringHealthCheck[];
   onRefresh: ReloadHandler;
   refreshDisabled: boolean;
-  onRunHealthCheck: RunHealthCheckHandler;
-  runningHealthCheckId: number | null;
+  onCheck: () => Promise<void>;
+  checking: boolean;
 }) {
   if (rows.length === 0) {
     return <EmptyCard title="暂无健康检查数据" description="当前没有可展示的健康检查配置。" />;
@@ -826,7 +926,15 @@ function MonitoringHealthTable({
     <TableShell
       title="健康检查"
       description="只读展示健康检查配置和最近一次执行结果。"
-      actions={<RefreshButton disabled={refreshDisabled} onRefresh={onRefresh} />}
+      actions={
+        <TabActions
+          checkDisabled={rows.length === 0}
+          checking={checking}
+          onCheck={onCheck}
+          onRefresh={onRefresh}
+          refreshDisabled={refreshDisabled}
+        />
+      }
     >
       <table className="admin-apps-table">
         <thead>
@@ -846,7 +954,6 @@ function MonitoringHealthTable({
             <th>耗时</th>
             <th>最近检查</th>
             <th>问题摘要</th>
-            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -876,14 +983,6 @@ function MonitoringHealthTable({
               <td>{row.latency_ms === null ? "-" : `${row.latency_ms} ms`}</td>
               <td>{formatDateTime(row.latest_checked_at)}</td>
               <td>{row.issue_summary ?? "无"}</td>
-              <td>
-                <RunHealthCheckButton
-                  healthCheckId={row.health_check_id}
-                  onRun={onRunHealthCheck}
-                  reloadAfterRun={onRefresh}
-                  runningHealthCheckId={runningHealthCheckId}
-                />
-              </td>
             </tr>
           ))}
         </tbody>
@@ -926,32 +1025,38 @@ function MonitoringTabContent({
   endpointsLoading,
   endpointsError,
   reloadEndpoints,
+  checkEndpoints,
   databaseRows,
   databasesLoading,
   databasesError,
   reloadDatabases,
+  checkDatabases,
   gatewayRows,
   gatewayLoading,
   gatewayError,
   reloadGateway,
+  checkGateway,
   dependencyRows,
   dependenciesLoading,
   dependenciesError,
   reloadDependencies,
+  checkDependencies,
   serviceAuth,
   serviceAuthLoading,
   serviceAuthError,
   reloadServiceAuth,
+  checkServiceAuth,
   openapiRows,
   openapiLoading,
   openapiError,
   reloadOpenApi,
+  checkOpenApi,
   healthRows,
   healthLoading,
   healthError,
   reloadHealth,
-  onRunHealthCheck,
-  runningHealthCheckId,
+  checkHealth,
+  runningTabCheck,
   manualCheckMessage,
   manualCheckError,
 }: {
@@ -964,32 +1069,38 @@ function MonitoringTabContent({
   endpointsLoading: boolean;
   endpointsError: string | null;
   reloadEndpoints: ReloadHandler;
+  checkEndpoints: () => Promise<void>;
   databaseRows: SystemMonitoringDatabaseStatus[];
   databasesLoading: boolean;
   databasesError: string | null;
   reloadDatabases: ReloadHandler;
+  checkDatabases: () => Promise<void>;
   gatewayRows: SystemMonitoringGatewayBinding[];
   gatewayLoading: boolean;
   gatewayError: string | null;
   reloadGateway: ReloadHandler;
+  checkGateway: () => Promise<void>;
   dependencyRows: SystemMonitoringDependency[];
   dependenciesLoading: boolean;
   dependenciesError: string | null;
   reloadDependencies: ReloadHandler;
+  checkDependencies: () => Promise<void>;
   serviceAuth: SystemMonitoringServiceAuthResponse;
   serviceAuthLoading: boolean;
   serviceAuthError: string | null;
   reloadServiceAuth: ReloadHandler;
+  checkServiceAuth: () => Promise<void>;
   openapiRows: SystemMonitoringOpenApiSource[];
   openapiLoading: boolean;
   openapiError: string | null;
   reloadOpenApi: ReloadHandler;
+  checkOpenApi: () => Promise<void>;
   healthRows: SystemMonitoringHealthCheck[];
   healthLoading: boolean;
   healthError: string | null;
   reloadHealth: ReloadHandler;
-  onRunHealthCheck: RunHealthCheckHandler;
-  runningHealthCheckId: number | null;
+  checkHealth: () => Promise<void>;
+  runningTabCheck: MonitoringTabKey | null;
   manualCheckMessage: string | null;
   manualCheckError: string | null;
 }) {
@@ -1017,8 +1128,8 @@ function MonitoringTabContent({
           rows={endpointRows}
           onRefresh={reloadEndpoints}
           refreshDisabled={endpointsLoading}
-          onRunHealthCheck={onRunHealthCheck}
-          runningHealthCheckId={runningHealthCheckId}
+          onCheck={checkEndpoints}
+          checking={runningTabCheck === "endpoints"}
         />
       </SimpleTabContent>
     );
@@ -1037,8 +1148,8 @@ function MonitoringTabContent({
           rows={databaseRows}
           onRefresh={reloadDatabases}
           refreshDisabled={databasesLoading}
-          onRunHealthCheck={onRunHealthCheck}
-          runningHealthCheckId={runningHealthCheckId}
+          onCheck={checkDatabases}
+          checking={runningTabCheck === "databases"}
         />
       </SimpleTabContent>
     );
@@ -1046,8 +1157,20 @@ function MonitoringTabContent({
 
   if (activeTab === "gateway") {
     return (
-      <SimpleTabContent loading={gatewayLoading} error={gatewayError} loadingText="正在加载 Gateway 状态…">
-        <MonitoringGatewayTable rows={gatewayRows} onRefresh={reloadGateway} refreshDisabled={gatewayLoading} />
+      <SimpleTabContent
+        loading={gatewayLoading}
+        error={gatewayError}
+        loadingText="正在加载 Gateway 状态…"
+        manualMessage={manualCheckMessage}
+        manualError={manualCheckError}
+      >
+        <MonitoringGatewayTable
+          rows={gatewayRows}
+          onRefresh={reloadGateway}
+          refreshDisabled={gatewayLoading}
+          onCheck={checkGateway}
+          checking={runningTabCheck === "gateway"}
+        />
       </SimpleTabContent>
     );
   }
@@ -1058,11 +1181,15 @@ function MonitoringTabContent({
         loading={dependenciesLoading}
         error={dependenciesError}
         loadingText="正在加载系统依赖状态…"
+        manualMessage={manualCheckMessage}
+        manualError={manualCheckError}
       >
         <MonitoringDependenciesTable
           rows={dependencyRows}
           onRefresh={reloadDependencies}
           refreshDisabled={dependenciesLoading}
+          onCheck={checkDependencies}
+          checking={runningTabCheck === "dependencies"}
         />
       </SimpleTabContent>
     );
@@ -1074,11 +1201,15 @@ function MonitoringTabContent({
         loading={serviceAuthLoading}
         error={serviceAuthError}
         loadingText="正在加载 Service Auth 状态…"
+        manualMessage={manualCheckMessage}
+        manualError={manualCheckError}
       >
         <MonitoringServiceAuthTables
           data={serviceAuth}
           onRefresh={reloadServiceAuth}
           refreshDisabled={serviceAuthLoading}
+          onCheck={checkServiceAuth}
+          checking={runningTabCheck === "service-auth"}
         />
       </SimpleTabContent>
     );
@@ -1086,8 +1217,20 @@ function MonitoringTabContent({
 
   if (activeTab === "openapi") {
     return (
-      <SimpleTabContent loading={openapiLoading} error={openapiError} loadingText="正在加载 OpenAPI 合同状态…">
-        <MonitoringOpenApiTable rows={openapiRows} onRefresh={reloadOpenApi} refreshDisabled={openapiLoading} />
+      <SimpleTabContent
+        loading={openapiLoading}
+        error={openapiError}
+        loadingText="正在加载 OpenAPI 合同状态…"
+        manualMessage={manualCheckMessage}
+        manualError={manualCheckError}
+      >
+        <MonitoringOpenApiTable
+          rows={openapiRows}
+          onRefresh={reloadOpenApi}
+          refreshDisabled={openapiLoading}
+          onCheck={checkOpenApi}
+          checking={runningTabCheck === "openapi"}
+        />
       </SimpleTabContent>
     );
   }
@@ -1105,8 +1248,8 @@ function MonitoringTabContent({
           rows={healthRows}
           onRefresh={reloadHealth}
           refreshDisabled={healthLoading}
-          onRunHealthCheck={onRunHealthCheck}
-          runningHealthCheckId={runningHealthCheckId}
+          onCheck={checkHealth}
+          checking={runningTabCheck === "health"}
         />
       </SimpleTabContent>
     );
@@ -1119,7 +1262,7 @@ export function SystemMonitoringPage() {
   const location = useLocation();
   const activeTab = getActiveTab(location.pathname);
   const { token } = useSessionRuntime();
-  const [runningHealthCheckId, setRunningHealthCheckId] = useState<number | null>(null);
+  const [runningTabCheck, setRunningTabCheck] = useState<MonitoringTabKey | null>(null);
   const [manualCheckMessage, setManualCheckMessage] = useState<string | null>(null);
   const [manualCheckError, setManualCheckError] = useState<string | null>(null);
 
@@ -1172,30 +1315,176 @@ export function SystemMonitoringPage() {
     reload: reloadHealth,
   } = useSystemMonitoringHealth(token, activeTab === "health");
 
-  const handleRunHealthCheck = useCallback<RunHealthCheckHandler>(
-    async (healthCheckId, afterRun) => {
+  const executeCheckTasks = useCallback(
+    async ({ tab, label, tasks, afterRun }: ExecuteCheckTasksArgs): Promise<void> => {
       if (!token) {
         setManualCheckMessage(null);
         setManualCheckError("缺少登录凭证");
         return;
       }
 
-      setRunningHealthCheckId(healthCheckId);
+      if (tasks.length === 0) {
+        setManualCheckMessage(`${label}暂无可检查项`);
+        setManualCheckError(null);
+        return;
+      }
+
+      setRunningTabCheck(tab);
       setManualCheckMessage(null);
       setManualCheckError(null);
 
       try {
-        const result = await runSystemMonitoringHealthCheck(token, healthCheckId);
+        let okCount = 0;
+        let warningCount = 0;
+        let errorCount = 0;
+
+        for (const task of tasks) {
+          const result = await task.run(token);
+          const classified = classifyResultStatus(result.status);
+
+          if (classified === "ok") {
+            okCount += 1;
+          } else if (classified === "warning") {
+            warningCount += 1;
+          } else {
+            errorCount += 1;
+          }
+        }
+
         await afterRun();
-        setManualCheckMessage(`健康检查 #${result.health_check_id} 已执行：${result.status}`);
+        setManualCheckMessage(
+          `${label}检查完成：共 ${tasks.length} 项，正常 ${okCount}，需关注 ${warningCount}，异常 ${errorCount}`,
+        );
       } catch (error) {
         setManualCheckError(toErrorMessage(error));
       } finally {
-        setRunningHealthCheckId(null);
+        setRunningTabCheck(null);
       }
     },
     [token],
   );
+
+  const checkEndpoints = useCallback(async () => {
+    const tasks = endpoints.flatMap((row): CheckTask[] => {
+      const healthCheckId = row.health_check_id;
+      if (healthCheckId === null) {
+        return [];
+      }
+
+      return [
+        {
+          key: `endpoint-${healthCheckId}`,
+          run: (currentToken) => runSystemMonitoringHealthCheck(currentToken, healthCheckId),
+        },
+      ];
+    });
+
+    await executeCheckTasks({
+      tab: "endpoints",
+      label: "API 状态",
+      tasks,
+      afterRun: reloadEndpoints,
+    });
+  }, [endpoints, executeCheckTasks, reloadEndpoints]);
+
+  const checkDatabases = useCallback(async () => {
+    const tasks = databases.flatMap((row): CheckTask[] => {
+      const healthCheckId = row.health_check_id;
+      if (healthCheckId === null) {
+        return [];
+      }
+
+      return [
+        {
+          key: `database-${healthCheckId}`,
+          run: (currentToken) => runSystemMonitoringHealthCheck(currentToken, healthCheckId),
+        },
+      ];
+    });
+
+    await executeCheckTasks({
+      tab: "databases",
+      label: "数据库状态",
+      tasks,
+      afterRun: reloadDatabases,
+    });
+  }, [databases, executeCheckTasks, reloadDatabases]);
+
+  const checkGateway = useCallback(async () => {
+    const tasks = gatewayRows.map((row): CheckTask => ({
+      key: `gateway-${row.binding_id}`,
+      run: (currentToken) => checkSystemMonitoringGateway(currentToken, row.binding_id),
+    }));
+
+    await executeCheckTasks({
+      tab: "gateway",
+      label: "Gateway 状态",
+      tasks,
+      afterRun: reloadGateway,
+    });
+  }, [executeCheckTasks, gatewayRows, reloadGateway]);
+
+  const checkDependencies = useCallback(async () => {
+    const tasks = dependencyRows.map((row): CheckTask => ({
+      key: `dependency-${row.dependency_id}`,
+      run: (currentToken) => checkSystemMonitoringDependency(currentToken, row.dependency_id),
+    }));
+
+    await executeCheckTasks({
+      tab: "dependencies",
+      label: "系统依赖状态",
+      tasks,
+      afterRun: reloadDependencies,
+    });
+  }, [dependencyRows, executeCheckTasks, reloadDependencies]);
+
+  const checkServiceAuth = useCallback(async () => {
+    const clientTasks = serviceAuth.clients.map((row): CheckTask => ({
+      key: `service-client-${row.client_id}`,
+      run: (currentToken) => checkSystemMonitoringServiceClient(currentToken, row.client_id),
+    }));
+    const permissionTasks = serviceAuth.permissions.map((row): CheckTask => ({
+      key: `service-permission-${row.permission_id}`,
+      run: (currentToken) =>
+        checkSystemMonitoringServicePermission(currentToken, row.permission_id),
+    }));
+
+    await executeCheckTasks({
+      tab: "service-auth",
+      label: "Service Auth 状态",
+      tasks: [...clientTasks, ...permissionTasks],
+      afterRun: reloadServiceAuth,
+    });
+  }, [executeCheckTasks, reloadServiceAuth, serviceAuth.clients, serviceAuth.permissions]);
+
+  const checkOpenApi = useCallback(async () => {
+    const tasks = openapiRows.map((row): CheckTask => ({
+      key: `openapi-${row.source_id}`,
+      run: (currentToken) => checkSystemMonitoringOpenApi(currentToken, row.source_id),
+    }));
+
+    await executeCheckTasks({
+      tab: "openapi",
+      label: "OpenAPI 合同状态",
+      tasks,
+      afterRun: reloadOpenApi,
+    });
+  }, [executeCheckTasks, openapiRows, reloadOpenApi]);
+
+  const checkHealth = useCallback(async () => {
+    const tasks = healthRows.map((row): CheckTask => ({
+      key: `health-${row.health_check_id}`,
+      run: (currentToken) =>
+        runSystemMonitoringHealthCheck(currentToken, row.health_check_id),
+    }));
+
+    await executeCheckTasks({
+      tab: "health",
+      label: "健康检查",
+      tasks,
+      afterRun: reloadHealth,
+    });
+  }, [executeCheckTasks, healthRows, reloadHealth]);
 
   return (
     <div className="page-stack">
@@ -1232,32 +1521,38 @@ export function SystemMonitoringPage() {
         endpointsLoading={endpointsLoading}
         endpointsError={endpointsError}
         reloadEndpoints={reloadEndpoints}
+        checkEndpoints={checkEndpoints}
         databaseRows={databases}
         databasesLoading={databasesLoading}
         databasesError={databasesError}
         reloadDatabases={reloadDatabases}
+        checkDatabases={checkDatabases}
         gatewayRows={gatewayRows}
         gatewayLoading={gatewayLoading}
         gatewayError={gatewayError}
         reloadGateway={reloadGateway}
+        checkGateway={checkGateway}
         dependencyRows={dependencyRows}
         dependenciesLoading={dependenciesLoading}
         dependenciesError={dependenciesError}
         reloadDependencies={reloadDependencies}
+        checkDependencies={checkDependencies}
         serviceAuth={serviceAuth}
         serviceAuthLoading={serviceAuthLoading}
         serviceAuthError={serviceAuthError}
         reloadServiceAuth={reloadServiceAuth}
+        checkServiceAuth={checkServiceAuth}
         openapiRows={openapiRows}
         openapiLoading={openapiLoading}
         openapiError={openapiError}
         reloadOpenApi={reloadOpenApi}
+        checkOpenApi={checkOpenApi}
         healthRows={healthRows}
         healthLoading={healthLoading}
         healthError={healthError}
         reloadHealth={reloadHealth}
-        onRunHealthCheck={handleRunHealthCheck}
-        runningHealthCheckId={runningHealthCheckId}
+        checkHealth={checkHealth}
+        runningTabCheck={runningTabCheck}
         manualCheckMessage={manualCheckMessage}
         manualCheckError={manualCheckError}
       />
