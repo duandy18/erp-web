@@ -4,6 +4,7 @@ import type {
   SystemMonitoringDependenciesResponse,
   SystemMonitoringEndpointsResponse,
   SystemMonitoringGatewayResponse,
+  SystemMonitoringHealthCheckRun,
   SystemMonitoringHealthResponse,
   SystemMonitoringOpenApiResponse,
   SystemMonitoringOverview,
@@ -74,4 +75,17 @@ export function fetchSystemMonitoringHealth(
   return apiRequest<SystemMonitoringHealthResponse>("/admin/system-monitoring/health", {
     token,
   });
+}
+
+export function runSystemMonitoringHealthCheck(
+  token: string,
+  healthCheckId: number,
+): Promise<SystemMonitoringHealthCheckRun> {
+  return apiRequest<SystemMonitoringHealthCheckRun>(
+    `/admin/app-registry/health-checks/${healthCheckId}/run`,
+    {
+      method: "POST",
+      token,
+    },
+  );
 }

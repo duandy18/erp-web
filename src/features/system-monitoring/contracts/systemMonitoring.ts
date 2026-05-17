@@ -207,3 +207,15 @@ export type SystemMonitoringHealthCheck = {
 export type SystemMonitoringHealthResponse = {
   health_checks: SystemMonitoringHealthCheck[];
 };
+
+export type SystemMonitoringHealthCheckRun = {
+  id: number;
+  health_check_id: number;
+  started_at: string;
+  finished_at: string | null;
+  status: string;
+  http_status: number | null;
+  latency_ms: number | null;
+  message: string | null;
+  raw_excerpt: string | null;
+};
