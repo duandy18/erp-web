@@ -87,3 +87,123 @@ export type SystemMonitoringDatabaseStatus = {
 export type SystemMonitoringDatabasesResponse = {
   databases: SystemMonitoringDatabaseStatus[];
 };
+
+export type SystemMonitoringGatewayBinding = {
+  binding_id: number;
+  app_code: string;
+  app_name: string;
+  env_code: string;
+  web_path: string;
+  api_path: string;
+  web_upstream_url: string | null;
+  api_upstream_url: string | null;
+  rewrite_mode: string;
+  is_published: boolean;
+  published_at: string | null;
+  binding_active: boolean;
+  status: SystemMonitoringStatus;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringGatewayResponse = {
+  gateway_bindings: SystemMonitoringGatewayBinding[];
+};
+
+export type SystemMonitoringDependency = {
+  dependency_id: number;
+  source_app_code: string;
+  source_app_name: string;
+  target_app_code: string;
+  target_app_name: string;
+  dependency_type: string;
+  description: string;
+  is_required: boolean;
+  dependency_status: string;
+  dependency_active: boolean;
+  status: SystemMonitoringStatus;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringDependenciesResponse = {
+  dependencies: SystemMonitoringDependency[];
+};
+
+export type SystemMonitoringServiceClient = {
+  client_id: number;
+  app_code: string;
+  app_name: string;
+  client_code: string;
+  client_name: string;
+  auth_type: string;
+  secret_ref: string | null;
+  client_active: boolean;
+  status: SystemMonitoringStatus;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringServicePermission = {
+  permission_id: number;
+  client_id: number;
+  client_code: string | null;
+  source_app_code: string;
+  source_app_name: string;
+  target_app_code: string;
+  target_app_name: string;
+  permission_code: string;
+  description: string;
+  permission_active: boolean;
+  status: SystemMonitoringStatus;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringServiceAuthResponse = {
+  clients: SystemMonitoringServiceClient[];
+  permissions: SystemMonitoringServicePermission[];
+};
+
+export type SystemMonitoringOpenApiSource = {
+  source_id: number;
+  app_code: string;
+  app_name: string;
+  env_code: string;
+  endpoint_id: number;
+  endpoint_url: string | null;
+  openapi_url: string;
+  last_fetched_at: string | null;
+  last_checksum: string | null;
+  last_status: string;
+  source_active: boolean;
+  status: SystemMonitoringStatus;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringOpenApiResponse = {
+  openapi_sources: SystemMonitoringOpenApiSource[];
+};
+
+export type SystemMonitoringHealthCheck = {
+  health_check_id: number;
+  app_code: string;
+  app_name: string;
+  env_code: string;
+  endpoint_id: number;
+  endpoint_type: string | null;
+  endpoint_name: string | null;
+  endpoint_url: string | null;
+  check_type: string;
+  expected_status: number;
+  timeout_ms: number;
+  interval_seconds: number;
+  severity: string;
+  check_active: boolean;
+  endpoint_active: boolean;
+  status: SystemMonitoringStatus;
+  http_status: number | null;
+  latency_ms: number | null;
+  latest_checked_at: string | null;
+  issue_summary: string | null;
+};
+
+export type SystemMonitoringHealthResponse = {
+  health_checks: SystemMonitoringHealthCheck[];
+};
