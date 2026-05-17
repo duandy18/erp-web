@@ -219,3 +219,19 @@ export type SystemMonitoringHealthCheckRun = {
   message: string | null;
   raw_excerpt: string | null;
 };
+
+export type SystemMonitoringCheckTarget =
+  | "gateway"
+  | "dependency"
+  | "service_client"
+  | "service_permission"
+  | "openapi";
+
+export type SystemMonitoringCheckResult = {
+  target_type: SystemMonitoringCheckTarget;
+  target_id: number;
+  status: SystemMonitoringStatus;
+  checked_at: string;
+  message: string;
+  details: Record<string, string | number | boolean | null>;
+};
