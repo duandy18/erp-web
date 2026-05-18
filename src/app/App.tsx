@@ -7,8 +7,21 @@ import { SystemUsersPage } from "../features/iam/pages/SystemUsersPage";
 import { RequireAuth } from "../features/iam/runtime/RequireAuth";
 import { SessionRuntimeProvider } from "../features/iam/runtime/SessionRuntimeProvider";
 import { MyAppsPage } from "../features/my-apps/pages/MyAppsPage";
-import { SystemMonitoringPage } from "../features/system-monitoring/pages/SystemMonitoringPage";
-import { SystemServiceAuthPage } from "../features/system-service-auth/pages/SystemServiceAuthPage";
+import {
+  SystemMonitoringDatabasesPage,
+  SystemMonitoringDependenciesPage,
+  SystemMonitoringEndpointsPage,
+  SystemMonitoringGatewayPage,
+  SystemMonitoringHealthPage,
+  SystemMonitoringOpenApiPage,
+  SystemMonitoringOverviewPage,
+  SystemMonitoringServiceAuthPage,
+} from "../features/system-monitoring/pages/SystemMonitoringPage";
+import {
+  SystemServiceAuthCapabilitiesPage,
+  SystemServiceAuthPermissionsPage,
+  SystemServiceAuthWriteStatusPage,
+} from "../features/system-service-auth/pages/SystemServiceAuthPage";
 import { AppShell } from "../shared/layout/AppShell";
 
 function AuthenticatedRoutes() {
@@ -21,19 +34,22 @@ function AuthenticatedRoutes() {
         <Route path="/system/apps" element={<SystemAppsListPage />} />
         <Route path="/system/apps/frontend-pages" element={<SystemAppsFrontendPagesPage />} />
 
-        <Route path="/system/service-auth" element={<SystemServiceAuthPage />} />
-        <Route path="/system/service-auth/capabilities" element={<SystemServiceAuthPage />} />
-        <Route path="/system/service-auth/permissions" element={<SystemServiceAuthPage />} />
-        <Route path="/system/service-auth/write-status" element={<SystemServiceAuthPage />} />
+        <Route path="/system/service-auth" element={<SystemServiceAuthCapabilitiesPage />} />
+        <Route
+          path="/system/service-auth/capabilities"
+          element={<SystemServiceAuthCapabilitiesPage />}
+        />
+        <Route path="/system/service-auth/permissions" element={<SystemServiceAuthPermissionsPage />} />
+        <Route path="/system/service-auth/write-status" element={<SystemServiceAuthWriteStatusPage />} />
 
-        <Route path="/system/monitoring" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/endpoints" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/databases" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/gateway" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/dependencies" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/service-auth" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/openapi" element={<SystemMonitoringPage />} />
-        <Route path="/system/monitoring/health" element={<SystemMonitoringPage />} />
+        <Route path="/system/monitoring" element={<SystemMonitoringOverviewPage />} />
+        <Route path="/system/monitoring/endpoints" element={<SystemMonitoringEndpointsPage />} />
+        <Route path="/system/monitoring/databases" element={<SystemMonitoringDatabasesPage />} />
+        <Route path="/system/monitoring/gateway" element={<SystemMonitoringGatewayPage />} />
+        <Route path="/system/monitoring/dependencies" element={<SystemMonitoringDependenciesPage />} />
+        <Route path="/system/monitoring/service-auth" element={<SystemMonitoringServiceAuthPage />} />
+        <Route path="/system/monitoring/openapi" element={<SystemMonitoringOpenApiPage />} />
+        <Route path="/system/monitoring/health" element={<SystemMonitoringHealthPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

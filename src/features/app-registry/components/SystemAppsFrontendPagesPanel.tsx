@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
 import type {
   AppSelfDescriptionDTO,
@@ -6,6 +8,14 @@ import type {
   AppSelfDescriptionSyncRunDTO,
 } from "../contracts/selfDescription";
 import { useAppSelfDescriptionCatalog } from "../hooks/useAppSelfDescriptionCatalog";
+
+type CatalogActionsProps = {
+  apps: Array<{ code: string; name: string }>;
+  selectedAppCode: string;
+  loading: boolean;
+  onSelectAppCode: (code: string) => void;
+  onRefresh: () => void;
+};
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
@@ -38,7 +48,45 @@ function BoolPill({ active }: { active: boolean }) {
   );
 }
 
-function ManifestSummary({ manifest }: { manifest: AppSelfDescriptionManifestDTO | null }) {
+function CatalogActions({
+  apps,
+  selectedAppCode,
+  loading,
+  onSelectAppCode,
+  onRefresh,
+}: CatalogActionsProps) {
+  return (
+    <div className="admin-apps-toolbar">
+      <select value={selectedAppCode} onChange={(event) => onSelectAppCode(event.target.value)}>
+        {apps.length === 0 ? <option value="">暂无可选业务系统</option> : null}
+        {apps.map((app) => (
+          <option key={app.code} value={app.code}>
+            {app.code} · {app.name}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="button"
+        className="admin-apps-button secondary"
+        disabled={!selectedAppCode || loading}
+        onClick={() => {
+          onRefresh();
+        }}
+      >
+        刷新
+      </button>
+    </div>
+  );
+}
+
+function ManifestSummary({
+  manifest,
+  actions,
+}: {
+  manifest: AppSelfDescriptionManifestDTO | null;
+  actions: ReactNode;
+}) {
   if (!manifest) {
     return (
       <section className="admin-apps-card">
@@ -47,6 +95,7 @@ function ManifestSummary({ manifest }: { manifest: AppSelfDescriptionManifestDTO
             <h2>暂无 Manifest</h2>
             <p>当前系统还没有同步 manifest。请先在“独立系统列表”中执行“同步自描述”。</p>
           </div>
+          {actions}
         </div>
       </section>
     );
@@ -59,6 +108,7 @@ function ManifestSummary({ manifest }: { manifest: AppSelfDescriptionManifestDTO
           <h2>{manifest.app_name}</h2>
           <p>{manifest.description}</p>
         </div>
+        {actions}
       </div>
 
       <div className="admin-apps-profile-grid">
@@ -68,7 +118,9 @@ function ManifestSummary({ manifest }: { manifest: AppSelfDescriptionManifestDTO
         </article>
         <article className="admin-apps-profile-link">
           <span>系统类型 / 状态</span>
-          <strong>{manifest.app_type} / {manifest.status}</strong>
+          <strong>
+            {manifest.app_type} / {manifest.status}
+          </strong>
         </article>
         <article className="admin-apps-profile-link">
           <span>默认入口</span>
@@ -91,7 +143,11 @@ function ManifestSummary({ manifest }: { manifest: AppSelfDescriptionManifestDTO
   );
 }
 
-function LatestSyncRunSummary({ latestSyncRun }: { latestSyncRun: AppSelfDescriptionSyncRunDTO | null }) {
+function LatestSyncRunSummary({
+  latestSyncRun,
+}: {
+  latestSyncRun: AppSelfDescriptionSyncRunDTO | null;
+}) {
   if (!latestSyncRun) {
     return (
       <section className="admin-apps-card">
@@ -111,9 +167,9 @@ function LatestSyncRunSummary({ latestSyncRun }: { latestSyncRun: AppSelfDescrip
         <div>
           <h2>最近同步记录</h2>
           <p>
-            状态：{latestSyncRun.status}；读取 {latestSyncRun.fetched_count}；
-            新增 {latestSyncRun.inserted_count}；更新 {latestSyncRun.updated_count}；
-            删除 {latestSyncRun.deleted_count}；完成时间 {formatDateTime(latestSyncRun.finished_at)}
+            状态：{latestSyncRun.status}；读取 {latestSyncRun.fetched_count}； 新增{" "}
+            {latestSyncRun.inserted_count}；更新 {latestSyncRun.updated_count}； 删除{" "}
+            {latestSyncRun.deleted_count}；完成时间 {formatDateTime(latestSyncRun.finished_at)}
           </p>
         </div>
       </div>
@@ -172,7 +228,9 @@ function PageCatalogTable({ pages }: { pages: AppSelfDescriptionPageDTO[] }) {
                 <td>{page.level}</td>
                 <td>{emptyText(page.read_permission_code)}</td>
                 <td>{emptyText(page.write_permission_code)}</td>
-                <td><BoolPill active={page.is_active} /></td>
+                <td>
+                  <BoolPill active={page.is_active} />
+                </td>
                 <td>{page.sort_order}</td>
                 <td>{formatDateTime(page.source_updated_at)}</td>
                 <td>{formatDateTime(page.last_synced_at)}</td>
@@ -185,7 +243,13 @@ function PageCatalogTable({ pages }: { pages: AppSelfDescriptionPageDTO[] }) {
   );
 }
 
-function PageCatalogContent({ selfDescription }: { selfDescription: AppSelfDescriptionDTO | null }) {
+function PageCatalogContent({
+  selfDescription,
+  actions,
+}: {
+  selfDescription: AppSelfDescriptionDTO | null;
+  actions: ReactNode;
+}) {
   if (!selfDescription) {
     return (
       <section className="admin-apps-card">
@@ -194,6 +258,7 @@ function PageCatalogContent({ selfDescription }: { selfDescription: AppSelfDescr
             <h2>暂无前端页面目录</h2>
             <p>请选择已同步自描述的业务系统。没有数据时，先回到“独立系统列表”执行“同步自描述”。</p>
           </div>
+          {actions}
         </div>
       </section>
     );
@@ -201,7 +266,7 @@ function PageCatalogContent({ selfDescription }: { selfDescription: AppSelfDescr
 
   return (
     <div className="admin-apps-stack">
-      <ManifestSummary manifest={selfDescription.manifest} />
+      <ManifestSummary actions={actions} manifest={selfDescription.manifest} />
       <LatestSyncRunSummary latestSyncRun={selfDescription.latest_sync_run} />
       <PageCatalogTable pages={selfDescription.pages} />
     </div>
@@ -211,8 +276,8 @@ function PageCatalogContent({ selfDescription }: { selfDescription: AppSelfDescr
 export function SystemAppsFrontendPagesPanel() {
   const { token, user } = useSessionRuntime();
   const canRead = Boolean(
-    user?.permissions.includes("page.erp.system.read")
-      || user?.permissions.includes("page.erp.system.write"),
+    user?.permissions.includes("page.erp.system.read") ||
+      user?.permissions.includes("page.erp.system.write"),
   );
 
   const {
@@ -224,6 +289,18 @@ export function SystemAppsFrontendPagesPanel() {
     error,
     reloadSelfDescription,
   } = useAppSelfDescriptionCatalog(token);
+
+  const actions = (
+    <CatalogActions
+      apps={apps}
+      loading={loading}
+      selectedAppCode={selectedAppCode}
+      onRefresh={() => {
+        void reloadSelfDescription();
+      }}
+      onSelectAppCode={setSelectedAppCode}
+    />
+  );
 
   if (!canRead) {
     return (
@@ -243,44 +320,7 @@ export function SystemAppsFrontendPagesPanel() {
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
       {loading ? <div className="admin-apps-alert">正在加载前端页面目录…</div> : null}
 
-      <section className="admin-apps-card">
-        <div className="admin-apps-table-header">
-          <div>
-            <h2>独立系统前端页面目录</h2>
-            <p>
-              选择一个已同步自描述的业务系统，查看 manifest 摘要和 page catalog。
-              本页不展开 service capabilities / dependencies 的治理逻辑。
-            </p>
-          </div>
-
-          <div className="admin-apps-toolbar">
-            <select
-              value={selectedAppCode}
-              onChange={(event) => setSelectedAppCode(event.target.value)}
-            >
-              {apps.length === 0 ? <option value="">暂无可选业务系统</option> : null}
-              {apps.map((app) => (
-                <option key={app.code} value={app.code}>
-                  {app.code} · {app.name}
-                </option>
-              ))}
-            </select>
-
-            <button
-              type="button"
-              className="admin-apps-button secondary"
-              disabled={!selectedAppCode || loading}
-              onClick={() => {
-                void reloadSelfDescription();
-              }}
-            >
-              刷新
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <PageCatalogContent selfDescription={selfDescription} />
+      <PageCatalogContent actions={actions} selfDescription={selfDescription} />
     </div>
   );
 }
