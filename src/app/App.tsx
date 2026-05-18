@@ -7,6 +7,7 @@ import { SystemUsersPage } from "../features/iam/pages/SystemUsersPage";
 import { RequireAuth } from "../features/iam/runtime/RequireAuth";
 import { SessionRuntimeProvider } from "../features/iam/runtime/SessionRuntimeProvider";
 import { MyAppsPage } from "../features/my-apps/pages/MyAppsPage";
+import { IndependentSystemUserPermissionsPage } from "../features/system-iam/pages/IndependentSystemUserPermissionsPage";
 import {
   SystemMonitoringDatabasesPage,
   SystemMonitoringDependenciesPage,
@@ -29,7 +30,9 @@ function AuthenticatedRoutes() {
     <AppShell>
       <Routes>
         <Route path="/" element={<MyAppsPage />} />
-        <Route path="/system/users" element={<SystemUsersPage />} />
+
+        <Route path="/system/users" element={<IndependentSystemUserPermissionsPage />} />
+        <Route path="/system/users/permission-config" element={<SystemUsersPage />} />
 
         <Route path="/system/apps" element={<SystemAppsListPage />} />
         <Route path="/system/apps/frontend-pages" element={<SystemAppsFrontendPagesPage />} />
