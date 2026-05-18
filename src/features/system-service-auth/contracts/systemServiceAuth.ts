@@ -26,3 +26,62 @@ export type SystemServiceAuthCapabilityDTO = {
 export type SystemServiceAuthCapabilityListResponse = {
   capabilities: SystemServiceAuthCapabilityDTO[];
 };
+
+export type SystemServiceAuthClientDTO = {
+  client_id: number;
+  app_code: string;
+  app_name: string;
+  client_code: string;
+  client_name: string;
+  auth_type: string;
+  secret_ref: string | null;
+  is_active: boolean;
+};
+
+export type SystemServiceAuthCapabilityOptionDTO = {
+  target_app_code: string;
+  target_app_name: string;
+  capability_code: string;
+  capability_name: string;
+  permission_code: string;
+  description: string | null;
+  is_active: boolean;
+  last_synced_at: string | null;
+};
+
+export type SystemServiceAuthPermissionDTO = {
+  permission_id: number;
+  client_id: number;
+  client_code: string | null;
+  source_app_code: string;
+  source_app_name: string;
+  target_app_code: string;
+  target_app_name: string;
+  permission_code: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  capability_code: string | null;
+  capability_name: string | null;
+  capability_active: boolean | null;
+};
+
+export type SystemServiceAuthPermissionListResponse = {
+  clients: SystemServiceAuthClientDTO[];
+  capability_options: SystemServiceAuthCapabilityOptionDTO[];
+  permissions: SystemServiceAuthPermissionDTO[];
+};
+
+export type SystemServiceAuthPermissionCreatePayload = {
+  client_id: number;
+  target_app_code: string;
+  permission_code: string;
+  description: string;
+  is_active: boolean;
+};
+
+export type SystemServiceAuthPermissionUpdatePayload = {
+  description?: string;
+  is_active?: boolean;
+};
