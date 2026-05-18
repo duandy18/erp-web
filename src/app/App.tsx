@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import { SystemAppsPage } from "../features/app-registry/pages/SystemAppsPage";
+import { SystemAppsFrontendPagesPage } from "../features/app-registry/pages/SystemAppsFrontendPagesPage";
+import { SystemAppsListPage } from "../features/app-registry/pages/SystemAppsListPage";
 import { LoginPage } from "../features/iam/pages/LoginPage";
 import { SystemUsersPage } from "../features/iam/pages/SystemUsersPage";
 import { RequireAuth } from "../features/iam/runtime/RequireAuth";
@@ -17,8 +18,8 @@ function AuthenticatedRoutes() {
         <Route path="/" element={<MyAppsPage />} />
         <Route path="/system/users" element={<SystemUsersPage />} />
 
-        <Route path="/system/apps" element={<SystemAppsPage activeView="independent-systems" />} />
-        <Route path="/system/apps/frontend-pages" element={<SystemAppsPage activeView="frontend-pages" />} />
+        <Route path="/system/apps" element={<SystemAppsListPage />} />
+        <Route path="/system/apps/frontend-pages" element={<SystemAppsFrontendPagesPage />} />
 
         <Route path="/system/service-auth" element={<SystemServiceAuthPage />} />
         <Route path="/system/service-auth/capabilities" element={<SystemServiceAuthPage />} />
