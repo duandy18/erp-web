@@ -1,80 +1,112 @@
-import type { ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useMemo, type ReactNode } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import type { NavigationPage } from "../../features/iam/contracts/navigation";
 import { useSessionRuntime } from "../../features/iam/runtime/useSessionRuntime";
 import { APP_RUNTIME_ENTRY_LABEL } from "../config";
+import {
+  buildBreadcrumbItems,
+  buildPageIndex,
+  buildPrimaryPathByPageCode,
+  resolvePageByPath,
+  type NavigationBreadcrumbItem,
+} from "../navigation/sidebarNavigation";
+import { Sidebar } from "./Sidebar";
+import "./sidebarNavigation.css";
 
 type AppShellProps = {
   children: ReactNode;
 };
 
-const getRouteByPageCode = (
-  pageCode: string,
-  routePrefixes: { page_code: string; route_prefix: string }[],
-): string | null => {
-  const matched = routePrefixes.find((item) => item.page_code === pageCode);
-  return matched?.route_prefix ?? null;
+type AppShellBreadcrumbProps = {
+  items: NavigationBreadcrumbItem[];
 };
 
+function AppShellBreadcrumb({ items }: AppShellBreadcrumbProps) {
+  if (items.length === 0) {
+    return <div className="eyebrow">ERP Platform</div>;
+  }
+
+  return (
+    <nav className="topbar-breadcrumb" aria-label="页面路径">
+      {items.map((item, index) => {
+        const last = index === items.length - 1;
+        const content = item.path && !last
+          ? (
+              <Link className="topbar-breadcrumb-link" to={item.path}>
+                {item.name}
+              </Link>
+            )
+          : (
+              <span className={last ? "topbar-breadcrumb-current" : "topbar-breadcrumb-label"}>
+                {item.name}
+              </span>
+            );
+
+        return (
+          <span key={item.code} className="topbar-breadcrumb-item">
+            {index > 0 ? <span className="topbar-breadcrumb-separator">/</span> : null}
+            {content}
+          </span>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function AppShell({ children }: AppShellProps) {
+  const location = useLocation();
   const navigate = useNavigate();
   const { navigation, user, logout } = useSessionRuntime();
 
-  const routePrefixes = navigation?.route_prefixes ?? [];
-  const pages = navigation?.pages ?? [];
+  const pages = useMemo(() => navigation?.pages ?? [], [navigation?.pages]);
+  const routePrefixes = useMemo(
+    () => navigation?.route_prefixes ?? [],
+    [navigation?.route_prefixes],
+  );
+
+  const pageIndex = useMemo(() => buildPageIndex(pages), [pages]);
+
+  const primaryPathByPageCode = useMemo(
+    () => buildPrimaryPathByPageCode(routePrefixes),
+    [routePrefixes],
+  );
+
+  const resolvedPage = useMemo(
+    () =>
+      resolvePageByPath({
+        pathname: location.pathname,
+        routePrefixes,
+        pageIndex,
+      }),
+    [location.pathname, pageIndex, routePrefixes],
+  );
+
+  const breadcrumbItems = useMemo(
+    () =>
+      buildBreadcrumbItems({
+        activePageCode: resolvedPage?.pageCode ?? null,
+        pageIndex,
+        primaryPathByPageCode,
+      }),
+    [pageIndex, primaryPathByPageCode, resolvedPage],
+  );
+
+  const currentPageTitle = breadcrumbItems[breadcrumbItems.length - 1]?.name ?? "总控平台";
 
   const handleLogout = () => {
     logout();
     navigate("/login", { replace: true });
   };
 
-  const renderPage = (page: NavigationPage): ReactNode => {
-    if (!page.show_in_sidebar) {
-      return null;
-    }
-
-    const primaryRoute = getRouteByPageCode(page.code, routePrefixes);
-    const visibleChildren = page.children.filter((child) => child.show_in_sidebar);
-
-    return (
-      <div key={page.code} className="nav-list">
-        {primaryRoute ? (
-          <NavLink
-            to={primaryRoute}
-            className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
-            end={primaryRoute === "/"}
-          >
-            {page.name}
-          </NavLink>
-        ) : (
-          <div className="nav-link">{page.name}</div>
-        )}
-
-        {visibleChildren.map((child) => renderPage(child))}
-      </div>
-    );
-  };
-
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">ERP</div>
-          <div>
-            <div className="brand-title">安快泰 ERP</div>
-            <div className="brand-subtitle">Control Plane</div>
-          </div>
-        </div>
-
-        <nav className="nav-list">{pages.map((page) => renderPage(page))}</nav>
-      </aside>
+      <Sidebar />
 
       <main className="main">
         <header className="topbar">
-          <div>
-            <div className="eyebrow">ERP Platform</div>
-            <h1>总控平台</h1>
+          <div className="topbar-heading">
+            <AppShellBreadcrumb items={breadcrumbItems} />
+            <h1>{currentPageTitle}</h1>
           </div>
           <div className="topbar-actions">
             <div className="env-badge">
