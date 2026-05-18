@@ -1,5 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
+import { normalizeNavigationResponse } from "../../../shared/navigation/sidebarNavigation";
 import { fetchCurrentUser, fetchMyNavigation, loginWithPassword } from "../api/sessionApi";
 import type { CurrentUser } from "../contracts/auth";
 import type { MyNavigationOut } from "../contracts/navigation";
@@ -61,12 +62,16 @@ export function SessionRuntimeProvider({ children }: SessionRuntimeProviderProps
 
   const loadSession = useCallback(
     async (accessToken: string): Promise<void> => {
-      const [nextUser, nextNavigation] = await Promise.all([
+      const [nextUser, rawNavigation] = await Promise.all([
         fetchCurrentUser(accessToken),
         fetchMyNavigation(accessToken),
       ]);
 
-      applyAuthenticatedSession(accessToken, nextUser, nextNavigation);
+      applyAuthenticatedSession(
+        accessToken,
+        nextUser,
+        normalizeNavigationResponse(rawNavigation),
+      );
     },
     [applyAuthenticatedSession],
   );

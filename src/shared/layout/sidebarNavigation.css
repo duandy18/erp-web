@@ -1,0 +1,157 @@
+.sidebar-nav {
+  display: grid;
+  gap: 12px;
+}
+
+.sidebar-nav-section {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-nav-section-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #e5e7eb;
+  font-weight: 900;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-nav-section-button:hover {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.sidebar-nav-section-items {
+  display: grid;
+  gap: 8px;
+  padding-left: 10px;
+}
+
+.sidebar-nav-node {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-nav-link {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 14px;
+  color: #cbd5e1;
+}
+
+.sidebar-nav-link:hover,
+.sidebar-nav-link.active {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.sidebar-nav-link.group {
+  color: #e5e7eb;
+  font-weight: 800;
+}
+
+.sidebar-nav-children {
+  display: grid;
+  gap: 8px;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid #334155;
+}
+
+.sidebar-nav-depth-1 {
+  font-size: 15px;
+}
+
+.sidebar-nav-depth-2 {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  font-size: 14px;
+}
+
+.sidebar-nav-depth-3,
+.sidebar-nav-depth-4,
+.sidebar-nav-depth-5 {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  font-size: 13px;
+}
+
+.sidebar-nav-depth-2:not(.group),
+.sidebar-nav-depth-3:not(.group),
+.sidebar-nav-depth-4:not(.group),
+.sidebar-nav-depth-5:not(.group) {
+  color: #94a3b8;
+}
+
+.sidebar-nav-depth-2.active,
+.sidebar-nav-depth-3.active,
+.sidebar-nav-depth-4.active,
+.sidebar-nav-depth-5.active {
+  color: #ffffff;
+}
+
+.sidebar-nav-alert {
+  padding: 12px;
+  border: 1px solid #92400e;
+  border-radius: 14px;
+  background: rgba(146, 64, 14, 0.22);
+  color: #fde68a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.sidebar-nav-section-button.active {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.topbar-heading {
+  display: grid;
+  gap: 4px;
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.topbar-breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-breadcrumb-link {
+  color: #2563eb;
+}
+
+.topbar-breadcrumb-link:hover {
+  color: #1d4ed8;
+}
+
+.topbar-breadcrumb-label {
+  color: #64748b;
+}
+
+.topbar-breadcrumb-current {
+  color: #2563eb;
+}
+
+.topbar-breadcrumb-separator {
+  color: #94a3b8;
+}
