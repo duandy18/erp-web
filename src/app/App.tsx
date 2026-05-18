@@ -17,7 +17,8 @@ function AuthenticatedRoutes() {
         <Route path="/" element={<MyAppsPage />} />
         <Route path="/system/users" element={<SystemUsersPage />} />
 
-        <Route path="/system/apps" element={<SystemAppsPage />} />
+        <Route path="/system/apps" element={<SystemAppsPage activeView="independent-systems" />} />
+        <Route path="/system/apps/frontend-pages" element={<SystemAppsPage activeView="frontend-pages" />} />
 
         <Route path="/system/service-auth" element={<SystemServiceAuthPage />} />
         <Route path="/system/service-auth/capabilities" element={<SystemServiceAuthPage />} />
