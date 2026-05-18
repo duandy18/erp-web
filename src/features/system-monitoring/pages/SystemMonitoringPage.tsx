@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
-
 import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
 import {
   checkSystemMonitoringDependency,
@@ -63,17 +61,6 @@ type ExecuteCheckTasksArgs = {
   afterRun: ReloadHandler;
 };
 
-const MONITORING_TABS: { key: MonitoringTabKey; label: string; path: string }[] = [
-  { key: "overview", label: "应用运行总览", path: "/system/monitoring" },
-  { key: "endpoints", label: "API 状态", path: "/system/monitoring/endpoints" },
-  { key: "databases", label: "数据库状态", path: "/system/monitoring/databases" },
-  { key: "gateway", label: "Gateway 状态", path: "/system/monitoring/gateway" },
-  { key: "dependencies", label: "系统依赖状态", path: "/system/monitoring/dependencies" },
-  { key: "service-auth", label: "Service Auth 状态", path: "/system/monitoring/service-auth" },
-  { key: "openapi", label: "OpenAPI 合同状态", path: "/system/monitoring/openapi" },
-  { key: "health", label: "健康检查", path: "/system/monitoring/health" },
-];
-
 const STATUS_LABELS: Record<SystemMonitoringStatus, string> = {
   ok: "正常",
   warning: "待完善",
@@ -82,19 +69,6 @@ const STATUS_LABELS: Record<SystemMonitoringStatus, string> = {
   unchecked: "未检查",
   not_configured: "未配置",
 };
-
-function normalizePath(pathname: string): string {
-  if (pathname.length > 1 && pathname.endsWith("/")) {
-    return pathname.slice(0, -1);
-  }
-
-  return pathname;
-}
-
-function getActiveTab(pathname: string): MonitoringTabKey {
-  const normalizedPath = normalizePath(pathname);
-  return MONITORING_TABS.find((tab) => tab.path === normalizedPath)?.key ?? "overview";
-}
 
 function statusClassName(status: SystemMonitoringStatus): string {
   return status === "ok" ? "admin-apps-status success" : "admin-apps-status muted";
@@ -1258,9 +1232,12 @@ function MonitoringTabContent({
   return null;
 }
 
-export function SystemMonitoringPage() {
-  const location = useLocation();
-  const activeTab = getActiveTab(location.pathname);
+type SystemMonitoringPageProps = {
+  activePage: MonitoringTabKey;
+};
+
+export function SystemMonitoringPage({ activePage }: SystemMonitoringPageProps) {
+  const activeTab = activePage;
   const { token } = useSessionRuntime();
   const [runningTabCheck, setRunningTabCheck] = useState<MonitoringTabKey | null>(null);
   const [manualCheckMessage, setManualCheckMessage] = useState<string | null>(null);
@@ -1488,29 +1465,6 @@ export function SystemMonitoringPage() {
 
   return (
     <div className="page-stack">
-      <section className="page-heading">
-        <div className="eyebrow">System Monitoring</div>
-        <h2>系统监控</h2>
-        <p>查看各系统入口、Gateway、API、DB、依赖、Service Auth 和 OpenAPI 合同状态。</p>
-      </section>
-
-      <section className="admin-apps-card">
-        <div className="admin-apps-toolbar">
-          {MONITORING_TABS.map((tab) => (
-            <NavLink
-              key={tab.key}
-              to={tab.path}
-              end={tab.path === "/system/monitoring"}
-              className={({ isActive }) =>
-                isActive ? "admin-apps-button primary" : "admin-apps-button secondary"
-              }
-            >
-              {tab.label}
-            </NavLink>
-          ))}
-        </div>
-      </section>
-
       <MonitoringTabContent
         activeTab={activeTab}
         overview={overview}
@@ -1558,4 +1512,36 @@ export function SystemMonitoringPage() {
       />
     </div>
   );
+}
+
+export function SystemMonitoringOverviewPage() {
+  return <SystemMonitoringPage activePage="overview" />;
+}
+
+export function SystemMonitoringEndpointsPage() {
+  return <SystemMonitoringPage activePage="endpoints" />;
+}
+
+export function SystemMonitoringDatabasesPage() {
+  return <SystemMonitoringPage activePage="databases" />;
+}
+
+export function SystemMonitoringGatewayPage() {
+  return <SystemMonitoringPage activePage="gateway" />;
+}
+
+export function SystemMonitoringDependenciesPage() {
+  return <SystemMonitoringPage activePage="dependencies" />;
+}
+
+export function SystemMonitoringServiceAuthPage() {
+  return <SystemMonitoringPage activePage="service-auth" />;
+}
+
+export function SystemMonitoringOpenApiPage() {
+  return <SystemMonitoringPage activePage="openapi" />;
+}
+
+export function SystemMonitoringHealthPage() {
+  return <SystemMonitoringPage activePage="health" />;
 }
