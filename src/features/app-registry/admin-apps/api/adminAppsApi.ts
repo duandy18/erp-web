@@ -3,6 +3,7 @@ import type {
   AdminAppCreatePayload,
   AdminAppDTO,
   AdminAppsResponse,
+  AdminAppSelfDescriptionSyncRunDTO,
   AdminAppUpdatePayload,
 } from "../contracts/adminApps";
 
@@ -33,6 +34,20 @@ export function updateAdminApp(
     token,
     body: payload,
   });
+}
+
+export function syncAdminAppSelfDescription(
+  token: string,
+  code: string,
+): Promise<AdminAppSelfDescriptionSyncRunDTO> {
+  return apiRequest<AdminAppSelfDescriptionSyncRunDTO>(
+    `/admin/app-registry/apps/${code}/sync-self-description`,
+    {
+      method: "POST",
+      token,
+      body: {},
+    },
+  );
 }
 
 export function enableAdminApp(token: string, code: string): Promise<AdminAppDTO> {

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useSessionRuntime } from "../../../iam/runtime/useSessionRuntime";
-import type { AdminAppDTO, AdminAppStatus } from "../contracts/adminApps";
+import type {
+  AdminAppDTO,
+  AdminAppSelfDescriptionSyncRunDTO,
+  AdminAppStatus,
+} from "../contracts/adminApps";
 import type { AdminAppsPresenter } from "../hooks/useAdminAppsPresenter";
 
 type AdminAppsPanelProps = {
@@ -29,6 +33,44 @@ const CODE_PATTERN = /^[a-z][a-z0-9-]*$/;
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value) {
+    return "暂无";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("zh-CN", {
+    hour12: false,
+  });
+}
+
+function formatSyncRunMessage(result: AdminAppSelfDescriptionSyncRunDTO): string {
+  if (result.status !== "success") {
+    return result.error_message ?? result.raw_excerpt ?? "自描述同步未成功";
+  }
+
+  return [
+    "自描述同步成功",
+    `读取 ${result.fetched_count}`,
+    `新增 ${result.inserted_count}`,
+    `更新 ${result.updated_count}`,
+    `删除 ${result.deleted_count}`,
+    `完成时间 ${formatDateTime(result.finished_at)}`,
+  ].join("，");
+}
+
+function getSelfDescriptionSyncDisabledReason(app: AdminAppDTO): string | null {
+  if (app.code === "erp") {
+    return "ERP 总控平台不参与业务系统自描述同步";
+  }
+
+  return null;
 }
 
 function toDraft(app: AdminAppDTO): AdminAppDraft {
@@ -113,9 +155,11 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     loading,
     creating,
     mutating,
+    syncingCode,
     error,
     createApp,
     updateApp,
+    syncSelfDescription,
     enableApp,
     disableApp,
     setError,
@@ -213,15 +257,15 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     if (!canManage) return;
 
     try {
-      const code = requireTrimmed(newCode, "请填写应用编码");
+      const code = requireTrimmed(newCode, "请填写系统编码");
       if (!CODE_PATTERN.test(code)) {
-        throw new Error("应用编码只能使用小写字母、数字和中划线，并且必须以小写字母开头");
+        throw new Error("系统编码只能使用小写字母、数字和中划线，并且必须以小写字母开头");
       }
 
       await createApp({
         code,
-        name: requireTrimmed(newName, "请填写应用名称"),
-        description: requireTrimmed(newDescription, "请填写应用说明"),
+        name: requireTrimmed(newName, "请填写系统名称"),
+        description: requireTrimmed(newDescription, "请填写系统说明"),
         web_path: validatePath(newWebPath, "请填写 Gateway Web 路径"),
         api_path: validatePath(newApiPath, "请填写 Gateway API 路径"),
         local_web_url: validateLocalUrl(newLocalWebUrl, "请填写本地 Web 地址"),
@@ -233,7 +277,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
 
       resetCreateForm();
     } catch (currentError) {
-      setError(errorMessage(currentError, "创建注册应用失败"));
+      setError(errorMessage(currentError, "创建独立系统失败"));
     }
   }
 
@@ -244,8 +288,8 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
 
     try {
       await updateApp(app.code, {
-        name: requireTrimmed(draft.name, "请填写应用名称"),
-        description: requireTrimmed(draft.description, "请填写应用说明"),
+        name: requireTrimmed(draft.name, "请填写系统名称"),
+        description: requireTrimmed(draft.description, "请填写系统说明"),
         web_path: validatePath(draft.web_path, "请填写 Gateway Web 路径"),
         api_path: validatePath(draft.api_path, "请填写 Gateway API 路径"),
         local_web_url: validateLocalUrl(draft.local_web_url, "请填写本地 Web 地址"),
@@ -255,7 +299,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         is_active: draft.is_active,
       });
 
-      setRowMessage((prev) => ({ ...prev, [app.code]: "应用注册信息已保存" }));
+      setRowMessage((prev) => ({ ...prev, [app.code]: "独立系统信息已保存" }));
     } catch (currentError) {
       setRowMessage((prev) => ({
         ...prev,
@@ -264,11 +308,42 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     }
   }
 
+  async function handleSyncSelfDescription(app: AdminAppDTO) {
+    if (!canManage) return;
+
+    const disabledReason = getSelfDescriptionSyncDisabledReason(app);
+    if (disabledReason) {
+      setRowMessage((prev) => ({
+        ...prev,
+        [app.code]: disabledReason,
+      }));
+      return;
+    }
+
+    setRowMessage((prev) => ({
+      ...prev,
+      [app.code]: "正在同步自描述…",
+    }));
+
+    try {
+      const result = await syncSelfDescription(app.code);
+      setRowMessage((prev) => ({
+        ...prev,
+        [app.code]: formatSyncRunMessage(result),
+      }));
+    } catch (currentError) {
+      setRowMessage((prev) => ({
+        ...prev,
+        [app.code]: errorMessage(currentError, "同步自描述失败"),
+      }));
+    }
+  }
+
   async function handleToggleActive(app: AdminAppDTO) {
     if (!canManage) return;
 
     const nextAction = app.is_active ? "停用" : "启用";
-    if (!window.confirm(`确认${nextAction}应用「${app.name}」？`)) return;
+    if (!window.confirm(`确认${nextAction}独立系统「${app.name}」？`)) return;
 
     try {
       if (app.is_active) {
@@ -277,7 +352,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         await enableApp(app.code);
       }
 
-      setRowMessage((prev) => ({ ...prev, [app.code]: `应用已${nextAction}` }));
+      setRowMessage((prev) => ({ ...prev, [app.code]: `独立系统已${nextAction}` }));
     } catch (currentError) {
       setRowMessage((prev) => ({
         ...prev,
@@ -299,20 +374,18 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
 
       {!canManage ? (
-        <div className="admin-apps-alert">当前为只读模式，不能创建、编辑、启用或停用应用。</div>
+        <div className="admin-apps-alert">当前为只读模式，不能创建、编辑、启用、停用或同步自描述。</div>
       ) : null}
 
       {canManage ? (
         <form className="admin-apps-card admin-apps-create-grid" onSubmit={handleCreate}>
           <div className="admin-apps-form-intro">
-            <h2>创建注册应用</h2>
-            <p>
-              App code 创建后不可修改。启用 / 停用只影响 is_active，不会写入 status。
-            </p>
+            <h2>创建独立系统</h2>
+            <p>系统编码创建后不可修改。启用 / 停用只影响 is_active，不会写入 status。</p>
           </div>
 
           <label>
-            <span>应用编码</span>
+            <span>系统编码</span>
             <input
               placeholder="billing"
               value={newCode}
@@ -321,7 +394,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <label>
-            <span>应用名称</span>
+            <span>系统名称</span>
             <input
               placeholder="Billing 财务系统"
               value={newName}
@@ -355,7 +428,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <label className="admin-apps-wide">
-            <span>应用说明</span>
+            <span>系统说明</span>
             <input
               placeholder="说明该系统的边界和入口用途"
               value={newDescription}
@@ -400,7 +473,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <button type="submit" className="admin-apps-button primary" disabled={creating}>
-            {creating ? "创建中…" : "创建应用"}
+            {creating ? "创建中…" : "创建系统"}
           </button>
         </form>
       ) : null}
@@ -408,13 +481,13 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
-            <h2>注册应用列表</h2>
-            <p>管理 ERP 控制面中的系统入口、API 路径、本地端口合同和启停状态。</p>
+            <h2>独立系统列表</h2>
+            <p>管理 ERP 控制面中的系统入口、API 路径、本地端口合同、启停状态和自描述同步。</p>
           </div>
 
           <div className="admin-apps-toolbar">
             <input
-              placeholder="搜索 code / 名称 / 路径"
+              placeholder="搜索编码 / 名称 / 路径"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
@@ -443,7 +516,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           <table className="admin-apps-table">
             <thead>
               <tr>
-                <th>应用</th>
+                <th>系统</th>
                 <th>说明</th>
                 <th>Gateway</th>
                 <th>本地地址</th>
@@ -457,13 +530,17 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
               {filteredApps.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="admin-apps-empty-cell">
-                    暂无符合条件的注册应用
+                    暂无符合条件的独立系统
                   </td>
                 </tr>
               ) : (
                 filteredApps.map((app) => {
                   const draft = drafts[app.code] ?? toDraft(app);
                   const dirty = isDraftDirty(app, draft);
+                  const isSyncing = syncingCode === app.code;
+                  const syncDisabledReason = getSelfDescriptionSyncDisabledReason(app);
+                  const syncDisabled =
+                    !canManage || mutating || isSyncing || syncDisabledReason !== null;
 
                   return (
                     <tr key={app.code}>
@@ -471,14 +548,14 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         <div className="admin-apps-code">{app.code}</div>
                         <input
                           value={draft.name}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) => patchDraft(app.code, { name: event.target.value })}
                         />
                       </td>
                       <td>
                         <textarea
                           value={draft.description}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { description: event.target.value })
                           }
@@ -487,14 +564,14 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                       <td>
                         <input
                           value={draft.web_path}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { web_path: event.target.value })
                           }
                         />
                         <input
                           value={draft.api_path}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { api_path: event.target.value })
                           }
@@ -503,14 +580,14 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                       <td>
                         <input
                           value={draft.local_web_url}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { local_web_url: event.target.value })
                           }
                         />
                         <input
                           value={draft.local_api_url}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { local_api_url: event.target.value })
                           }
@@ -519,7 +596,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                       <td>
                         <select
                           value={draft.status}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { status: event.target.value as AdminAppStatus })
                           }
@@ -531,7 +608,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                       <td>
                         <input
                           value={draft.sort_order}
-                          disabled={!canManage || mutating}
+                          disabled={!canManage || mutating || isSyncing}
                           onChange={(event) =>
                             patchDraft(app.code, { sort_order: event.target.value })
                           }
@@ -542,7 +619,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                           <input
                             type="checkbox"
                             checked={draft.is_active}
-                            disabled={!canManage || mutating}
+                            disabled={!canManage || mutating || isSyncing}
                             onChange={(event) =>
                               patchDraft(app.code, { is_active: event.target.checked })
                             }
@@ -564,7 +641,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                           <button
                             type="button"
                             className="admin-apps-button secondary"
-                            disabled={!canManage || mutating || !dirty}
+                            disabled={!canManage || mutating || isSyncing || !dirty}
                             onClick={() => {
                               void handleSave(app);
                             }}
@@ -574,7 +651,22 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                           <button
                             type="button"
                             className="admin-apps-button secondary"
-                            disabled={!canManage || mutating}
+                            disabled={syncDisabled}
+                            title={syncDisabledReason ?? undefined}
+                            onClick={() => {
+                              void handleSyncSelfDescription(app);
+                            }}
+                          >
+                            {syncDisabledReason
+                              ? "不参与同步"
+                              : isSyncing
+                                ? "同步中…"
+                                : "同步自描述"}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-apps-button secondary"
+                            disabled={!canManage || mutating || isSyncing}
                             onClick={() => {
                               void handleToggleActive(app);
                             }}
@@ -583,6 +675,9 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                           </button>
                         </div>
 
+                        {syncDisabledReason ? (
+                          <div className="admin-apps-muted">{syncDisabledReason}</div>
+                        ) : null}
                         {dirty ? <div className="admin-apps-muted">本行有未保存修改</div> : null}
                         {rowMessage[app.code] ? (
                           <div className="admin-apps-muted">{rowMessage[app.code]}</div>
