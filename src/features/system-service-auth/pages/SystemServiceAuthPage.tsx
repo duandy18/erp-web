@@ -8,11 +8,15 @@ import type {
   SystemServiceAuthCapabilityRouteDTO,
   SystemServiceAuthClientDTO,
   SystemServiceAuthPermissionDTO,
+  SystemServiceAuthWriteRunDTO,
+  SystemServiceAuthWriteStatusItemDTO,
 } from "../contracts/systemServiceAuth";
 import { useSystemServiceAuthCapabilities } from "../hooks/useSystemServiceAuthCapabilities";
 import { useSystemServiceAuthPermissions } from "../hooks/useSystemServiceAuthPermissions";
+import { useSystemServiceAuthWriteStatus } from "../hooks/useSystemServiceAuthWriteStatus";
 
 type ActiveFilter = "all" | "active" | "inactive";
+type WriteStatusFilter = "all" | "success" | "failure" | "pending" | "skipped" | "no-run";
 
 type PermissionDraft = {
   description: string;
@@ -59,6 +63,40 @@ function BoolPill({ active }: { active: boolean }) {
 
 function WarningPill({ text }: { text: string }) {
   return <span className="admin-apps-status muted">{text}</span>;
+}
+
+function WriteStatusPill({ run }: { run: SystemServiceAuthWriteRunDTO | null }) {
+  if (!run) {
+    return <WarningPill text="未写入" />;
+  }
+
+  return (
+    <span className={run.status === "success" ? "admin-apps-status success" : "admin-apps-status muted"}>
+      {writeStatusText(run.status)}
+    </span>
+  );
+}
+
+function writeStatusText(status: string): string {
+  const map: Record<string, string> = {
+    failure: "失败",
+    pending: "待执行",
+    running: "执行中",
+    skipped: "跳过",
+    success: "成功",
+  };
+
+  return map[status] ?? status;
+}
+
+function operationText(operation: string): string {
+  const map: Record<string, string> = {
+    disable: "停用",
+    upsert: "写入/更新",
+    verify: "读回验证",
+  };
+
+  return map[operation] ?? operation;
 }
 
 function routeText(route: SystemServiceAuthCapabilityRouteDTO): string {
@@ -118,6 +156,56 @@ function matchesPermissionKeyword(
   return haystack.includes(normalizedKeyword);
 }
 
+function matchesWriteStatusKeyword(
+  item: SystemServiceAuthWriteStatusItemDTO,
+  keyword: string,
+): boolean {
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  if (!normalizedKeyword) {
+    return true;
+  }
+
+  const latestRun = item.latest_run;
+  const haystack = [
+    item.client_code ?? "",
+    item.source_app_code,
+    item.source_app_name,
+    item.target_app_code,
+    item.target_app_name,
+    item.permission_code,
+    item.description,
+    latestRun?.operation ?? "",
+    latestRun?.status ?? "",
+    latestRun?.error_message ?? "",
+    latestRun?.raw_excerpt ?? "",
+    String(latestRun?.http_status ?? ""),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(normalizedKeyword);
+}
+
+function matchesWriteStatusFilter(
+  item: SystemServiceAuthWriteStatusItemDTO,
+  filter: WriteStatusFilter,
+): boolean {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (filter === "no-run") {
+    return item.latest_run === null;
+  }
+
+  const status = item.latest_run?.status;
+  if (filter === "pending") {
+    return status === "pending" || status === "running";
+  }
+
+  return status === filter;
+}
+
 function toPermissionDraft(permission: SystemServiceAuthPermissionDTO): PermissionDraft {
   return {
     description: permission.description,
@@ -161,6 +249,30 @@ function buildTargetOptions(
 
   for (const option of capabilityOptions) {
     map.set(option.target_app_code, option.target_app_name);
+  }
+
+  return Array.from(map.entries())
+    .map(([code, name]) => ({ code, name }))
+    .sort((left, right) => left.code.localeCompare(right.code));
+}
+
+function buildSourceOptionsFromItems(items: SystemServiceAuthWriteStatusItemDTO[]): TargetAppOption[] {
+  const map = new Map<string, string>();
+
+  for (const item of items) {
+    map.set(item.source_app_code, item.source_app_name);
+  }
+
+  return Array.from(map.entries())
+    .map(([code, name]) => ({ code, name }))
+    .sort((left, right) => left.code.localeCompare(right.code));
+}
+
+function buildTargetOptionsFromItems(items: SystemServiceAuthWriteStatusItemDTO[]): TargetAppOption[] {
+  const map = new Map<string, string>();
+
+  for (const item of items) {
+    map.set(item.target_app_code, item.target_app_name);
   }
 
   return Array.from(map.entries())
@@ -938,19 +1050,362 @@ function SystemServiceAuthPermissionsPanel() {
   );
 }
 
-function SystemServiceAuthPlaceholderPage({
-  title,
-  description,
+function WriteStatusSummary({
+  items,
+  recentRuns,
 }: {
-  title: string;
-  description: string;
+  items: SystemServiceAuthWriteStatusItemDTO[];
+  recentRuns: SystemServiceAuthWriteRunDTO[];
 }) {
+  const activePermissions = items.filter((item) => item.permission_active).length;
+  const successCount = items.filter((item) => item.latest_run?.status === "success").length;
+  const failureCount = items.filter((item) => item.latest_run?.status === "failure").length;
+  const pendingCount = items.filter(
+    (item) => item.latest_run?.status === "pending" || item.latest_run?.status === "running",
+  ).length;
+  const noRunCount = items.filter((item) => item.latest_run === null).length;
+
   return (
-    <div className="page-stack">
-      <section className="card">
-        <h3>{title}</h3>
-        <p>{description}</p>
+    <section className="admin-apps-card">
+      <div className="admin-apps-profile-grid">
+        <article className="admin-apps-profile-link">
+          <span>本地授权</span>
+          <strong>{items.length}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>本地启用</span>
+          <strong>{activePermissions}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>写入成功</span>
+          <strong>{successCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>写入失败</span>
+          <strong>{failureCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>待执行 / 执行中</span>
+          <strong>{pendingCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>未写入</span>
+          <strong>{noRunCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>最近记录</span>
+          <strong>{recentRuns.length}</strong>
+        </article>
+      </div>
+    </section>
+  );
+}
+
+function WriteStatusTable({
+  items,
+  loading,
+  onRefresh,
+}: {
+  items: SystemServiceAuthWriteStatusItemDTO[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <section className="admin-apps-card">
+        <div className="admin-apps-table-header">
+          <div>
+            <h2>写入状态</h2>
+            <p>暂无本地授权记录。请先在“调用授权”页面创建授权。</p>
+          </div>
+          <div className="admin-apps-row-actions">
+            <button
+              type="button"
+              className="admin-apps-button secondary"
+              disabled={loading}
+              onClick={onRefresh}
+            >
+              刷新
+            </button>
+          </div>
+        </div>
       </section>
+    );
+  }
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-table-header">
+        <div>
+          <h2>写入状态</h2>
+          <p>展示每条本地调用授权的最近一次写入记录。当前页面只读，不触发写回。</p>
+        </div>
+        <div className="admin-apps-row-actions">
+          <button
+            type="button"
+            className="admin-apps-button secondary"
+            disabled={loading}
+            onClick={onRefresh}
+          >
+            刷新
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-apps-table-wrap">
+        <table className="admin-apps-table">
+          <thead>
+            <tr>
+              <th>授权</th>
+              <th>目标系统</th>
+              <th>本地状态</th>
+              <th>最近写入</th>
+              <th>目标响应</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const run = item.latest_run;
+
+              return (
+                <tr key={item.permission_id}>
+                  <td>
+                    <div className="admin-apps-code">{item.permission_code}</div>
+                    <div>{item.description}</div>
+                    <div className="admin-apps-muted">
+                      {item.client_code ?? `client:${item.client_id}`} · {item.source_app_name}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="admin-apps-code">{item.target_app_code}</div>
+                    <div>{item.target_app_name}</div>
+                  </td>
+                  <td>
+                    <BoolPill active={item.permission_active} />
+                  </td>
+                  <td>
+                    <WriteStatusPill run={run} />
+                    {run ? (
+                      <div className="admin-apps-muted">
+                        {operationText(run.operation)} · {run.status}
+                      </div>
+                    ) : (
+                      <div className="admin-apps-muted">尚未产生写入执行记录</div>
+                    )}
+                  </td>
+                  <td>
+                    {run ? (
+                      <>
+                        <div>HTTP：{emptyText(run.http_status)}</div>
+                        <div className="admin-apps-muted">
+                          目标：{emptyText(run.target_base_url)}
+                        </div>
+                        {run.error_message ? (
+                          <div className="admin-apps-muted">错误：{run.error_message}</div>
+                        ) : null}
+                        {run.raw_excerpt ? (
+                          <div className="admin-apps-muted">摘要：{run.raw_excerpt}</div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="admin-apps-muted">暂无目标响应</span>
+                    )}
+                  </td>
+                  <td>
+                    {run ? (
+                      <>
+                        <div>开始：{formatDateTime(run.started_at)}</div>
+                        <div className="admin-apps-muted">
+                          完成：{formatDateTime(run.finished_at)}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="admin-apps-muted">暂无</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function RecentWriteRunsTable({ runs }: { runs: SystemServiceAuthWriteRunDTO[] }) {
+  if (runs.length === 0) {
+    return (
+      <section className="admin-apps-card">
+        <div className="admin-apps-table-header">
+          <div>
+            <h2>最近写入记录</h2>
+            <p>暂无写入记录。后续写回执行服务上线后会在这里显示执行历史。</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-table-header">
+        <div>
+          <h2>最近写入记录</h2>
+          <p>按执行时间倒序展示最近写入记录。</p>
+        </div>
+      </div>
+
+      <div className="admin-apps-table-wrap">
+        <table className="admin-apps-table">
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>授权</th>
+              <th>操作 / 状态</th>
+              <th>目标</th>
+              <th>响应</th>
+              <th>时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((run) => (
+              <tr key={run.run_id}>
+                <td>
+                  <div className="admin-apps-code">#{run.run_id}</div>
+                  <div className="admin-apps-muted">permission #{run.permission_id}</div>
+                </td>
+                <td>
+                  <div className="admin-apps-code">{run.permission_code}</div>
+                  <div className="admin-apps-muted">
+                    {run.client_code ?? "-"} · {run.source_app_code} → {run.target_app_code}
+                  </div>
+                </td>
+                <td>
+                  <WriteStatusPill run={run} />
+                  <div className="admin-apps-muted">{operationText(run.operation)}</div>
+                </td>
+                <td>{emptyText(run.target_base_url)}</td>
+                <td>
+                  <div>HTTP：{emptyText(run.http_status)}</div>
+                  {run.error_message ? (
+                    <div className="admin-apps-muted">错误：{run.error_message}</div>
+                  ) : null}
+                </td>
+                <td>
+                  <div>开始：{formatDateTime(run.started_at)}</div>
+                  <div className="admin-apps-muted">完成：{formatDateTime(run.finished_at)}</div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function SystemServiceAuthWriteStatusPanel() {
+  const { token, user } = useSessionRuntime();
+  const canRead = Boolean(
+    user?.permissions.includes("page.erp.system.read") ||
+      user?.permissions.includes("page.erp.system.write"),
+  );
+
+  const { items, recentRuns, loading, error, reload } = useSystemServiceAuthWriteStatus(token);
+
+  const [keyword, setKeyword] = useState("");
+  const [sourceAppCode, setSourceAppCode] = useState("");
+  const [targetAppCode, setTargetAppCode] = useState("");
+  const [statusFilter, setStatusFilter] = useState<WriteStatusFilter>("all");
+
+  const sourceOptions = useMemo(() => buildSourceOptionsFromItems(items), [items]);
+  const targetOptions = useMemo(() => buildTargetOptionsFromItems(items), [items]);
+
+  const filteredItems = useMemo(
+    () =>
+      items.filter((item) => {
+        if (sourceAppCode && item.source_app_code !== sourceAppCode) return false;
+        if (targetAppCode && item.target_app_code !== targetAppCode) return false;
+        if (!matchesWriteStatusFilter(item, statusFilter)) return false;
+        return matchesWriteStatusKeyword(item, keyword);
+      }),
+    [items, keyword, sourceAppCode, statusFilter, targetAppCode],
+  );
+
+  if (!canRead) {
+    return (
+      <section className="admin-apps-card">
+        <div className="admin-apps-table-header">
+          <div>
+            <h2>无访问权限</h2>
+            <p>当前账号无系统协作配置访问权限。</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="admin-apps-stack">
+      {error ? <div className="admin-apps-alert danger">{error}</div> : null}
+      {loading ? <div className="admin-apps-alert">正在加载写入状态…</div> : null}
+
+      <WriteStatusSummary items={items} recentRuns={recentRuns} />
+
+      <section className="admin-apps-card">
+        <div className="admin-apps-table-header">
+          <div>
+            <h2>写入状态筛选</h2>
+            <p>按来源系统、目标系统、写入状态或关键字筛选本地授权写入状态。</p>
+          </div>
+          <div className="admin-apps-toolbar">
+            <select value={sourceAppCode} onChange={(event) => setSourceAppCode(event.target.value)}>
+              <option value="">全部来源系统</option>
+              {sourceOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code} · {option.name}
+                </option>
+              ))}
+            </select>
+            <select value={targetAppCode} onChange={(event) => setTargetAppCode(event.target.value)}>
+              <option value="">全部目标系统</option>
+              {targetOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code} · {option.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as WriteStatusFilter)}
+            >
+              <option value="all">全部写入状态</option>
+              <option value="success">成功</option>
+              <option value="failure">失败</option>
+              <option value="pending">待执行 / 执行中</option>
+              <option value="skipped">跳过</option>
+              <option value="no-run">未写入</option>
+            </select>
+            <input
+              placeholder="搜索 client / 权限 / 响应"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+          </div>
+        </div>
+      </section>
+
+      <WriteStatusTable
+        items={filteredItems}
+        loading={loading}
+        onRefresh={() => {
+          void reload();
+        }}
+      />
+
+      <RecentWriteRunsTable runs={recentRuns} />
     </div>
   );
 }
@@ -964,10 +1419,5 @@ export function SystemServiceAuthPermissionsPage() {
 }
 
 export function SystemServiceAuthWriteStatusPage() {
-  return (
-    <SystemServiceAuthPlaceholderPage
-      title="写入状态"
-      description="后续展示 ERP 写入目标系统 service auth 表的结果、失败原因、最近同步时间和可回滚记录。"
-    />
-  );
+  return <SystemServiceAuthWriteStatusPanel />;
 }

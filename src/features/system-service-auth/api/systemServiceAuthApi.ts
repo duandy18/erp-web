@@ -5,6 +5,7 @@ import type {
   SystemServiceAuthPermissionDTO,
   SystemServiceAuthPermissionListResponse,
   SystemServiceAuthPermissionUpdatePayload,
+  SystemServiceAuthWriteStatusListResponse,
 } from "../contracts/systemServiceAuth";
 
 type FetchSystemServiceAuthCapabilitiesParams = {
@@ -68,6 +69,17 @@ export function updateSystemServiceAuthPermission(
       method: "PATCH",
       token,
       body: payload,
+    },
+  );
+}
+
+export function fetchSystemServiceAuthWriteStatus(
+  token: string,
+): Promise<SystemServiceAuthWriteStatusListResponse> {
+  return apiRequest<SystemServiceAuthWriteStatusListResponse>(
+    "/admin/system-service-auth/write-status",
+    {
+      token,
     },
   );
 }

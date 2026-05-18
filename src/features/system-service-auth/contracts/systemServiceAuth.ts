@@ -85,3 +85,39 @@ export type SystemServiceAuthPermissionUpdatePayload = {
   description?: string;
   is_active?: boolean;
 };
+
+export type SystemServiceAuthWriteRunDTO = {
+  run_id: number;
+  permission_id: number;
+  source_app_code: string;
+  target_app_code: string;
+  client_code: string | null;
+  permission_code: string;
+  operation: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  target_base_url: string | null;
+  http_status: number | null;
+  error_message: string | null;
+  raw_excerpt: string | null;
+};
+
+export type SystemServiceAuthWriteStatusItemDTO = {
+  permission_id: number;
+  client_id: number;
+  client_code: string | null;
+  source_app_code: string;
+  source_app_name: string;
+  target_app_code: string;
+  target_app_name: string;
+  permission_code: string;
+  description: string;
+  permission_active: boolean;
+  latest_run: SystemServiceAuthWriteRunDTO | null;
+};
+
+export type SystemServiceAuthWriteStatusListResponse = {
+  items: SystemServiceAuthWriteStatusItemDTO[];
+  recent_runs: SystemServiceAuthWriteRunDTO[];
+};
