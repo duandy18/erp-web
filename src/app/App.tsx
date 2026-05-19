@@ -3,11 +3,12 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { SystemAppsFrontendPagesPage } from "../features/app-registry/pages/SystemAppsFrontendPagesPage";
 import { SystemAppsListPage } from "../features/app-registry/pages/SystemAppsListPage";
 import { LoginPage } from "../features/iam/pages/LoginPage";
-import { SystemUsersPage } from "../features/iam/pages/SystemUsersPage";
+import { AppPermissionsPage } from "../features/iam/pages/AppPermissionsPage";
+import { ErpPermissionsPage } from "../features/iam/pages/ErpPermissionsPage";
+import { UserAccountsPage } from "../features/iam/pages/UserAccountsPage";
 import { RequireAuth } from "../features/iam/runtime/RequireAuth";
 import { SessionRuntimeProvider } from "../features/iam/runtime/SessionRuntimeProvider";
 import { MyAppsPage } from "../features/my-apps/pages/MyAppsPage";
-import { IndependentSystemUserPermissionsPage } from "../features/system-iam/pages/IndependentSystemUserPermissionsPage";
 import {
   SystemMonitoringDatabasesPage,
   SystemMonitoringDependenciesPage,
@@ -31,8 +32,9 @@ function AuthenticatedRoutes() {
       <Routes>
         <Route path="/" element={<MyAppsPage />} />
 
-        <Route path="/system/users" element={<IndependentSystemUserPermissionsPage />} />
-        <Route path="/system/users/permission-config" element={<SystemUsersPage />} />
+        <Route path="/system/users/accounts" element={<UserAccountsPage />} />
+        <Route path="/system/users/erp-permissions" element={<ErpPermissionsPage />} />
+        <Route path="/system/users/app-permissions" element={<AppPermissionsPage />} />
 
         <Route path="/system/apps" element={<SystemAppsListPage />} />
         <Route path="/system/apps/frontend-pages" element={<SystemAppsFrontendPagesPage />} />
