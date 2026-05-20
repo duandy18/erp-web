@@ -17,7 +17,7 @@ import { useSystemServiceAuthWriteStatus } from "../hooks/useSystemServiceAuthWr
 
 type ActiveFilter = "all" | "active" | "inactive";
 type CapabilityStatusFilter = "all" | "active" | "inactive";
-type WriteStatusFilter = "all" | "success" | "failure" | "pending" | "skipped" | "no-run";
+type WriteStatusFilter = "all" | "apply-success" | "verify-success" | "apply-failure" | "verify-failure" | "no-apply" | "no-verify";
 
 type PermissionDraft = {
   description: string;
@@ -128,6 +128,60 @@ function operationText(operation: string): string {
   return map[operation] ?? operation;
 }
 
+type LatestRunsByOperation = {
+  applyByPermissionId: Map<number, SystemServiceAuthWriteRunDTO>;
+  verifyByPermissionId: Map<number, SystemServiceAuthWriteRunDTO>;
+};
+
+function isApplyOperation(operation: string): boolean {
+  return operation !== "verify";
+}
+
+function runStartedAtMillis(run: SystemServiceAuthWriteRunDTO): number {
+  const parsed = Date.parse(run.started_at);
+
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function pickLatestRun(
+  current: SystemServiceAuthWriteRunDTO | undefined,
+  next: SystemServiceAuthWriteRunDTO,
+): SystemServiceAuthWriteRunDTO {
+  if (!current) return next;
+
+  return runStartedAtMillis(next) >= runStartedAtMillis(current) ? next : current;
+}
+
+function buildLatestRunsByOperation(runs: SystemServiceAuthWriteRunDTO[]): LatestRunsByOperation {
+  const applyByPermissionId = new Map<number, SystemServiceAuthWriteRunDTO>();
+  const verifyByPermissionId = new Map<number, SystemServiceAuthWriteRunDTO>();
+
+  for (const run of runs) {
+    if (isApplyOperation(run.operation)) {
+      applyByPermissionId.set(
+        run.permission_id,
+        pickLatestRun(applyByPermissionId.get(run.permission_id), run),
+      );
+    } else {
+      verifyByPermissionId.set(
+        run.permission_id,
+        pickLatestRun(verifyByPermissionId.get(run.permission_id), run),
+      );
+    }
+  }
+
+  return {
+    applyByPermissionId,
+    verifyByPermissionId,
+  };
+}
+
+function compactExcerpt(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  return value.length > 220 ? `${value.slice(0, 220)}…` : value;
+}
+
 function routeText(route: SystemServiceAuthCapabilityRouteDTO): string {
   return `${route.http_method} ${route.path} ${route.route_name}`;
 }
@@ -218,23 +272,20 @@ function matchesWriteStatusKeyword(
 }
 
 function matchesWriteStatusFilter(
-  item: SystemServiceAuthWriteStatusItemDTO,
   filter: WriteStatusFilter,
+  latestApplyRun: SystemServiceAuthWriteRunDTO | null,
+  latestVerifyRun: SystemServiceAuthWriteRunDTO | null,
 ): boolean {
-  if (filter === "all") {
-    return true;
-  }
+  if (filter === "all") return true;
 
-  if (filter === "no-run") {
-    return item.latest_run === null;
-  }
+  if (filter === "apply-success") return latestApplyRun?.status === "success";
+  if (filter === "verify-success") return latestVerifyRun?.status === "success";
+  if (filter === "apply-failure") return latestApplyRun?.status === "failure";
+  if (filter === "verify-failure") return latestVerifyRun?.status === "failure";
+  if (filter === "no-apply") return latestApplyRun === null;
+  if (filter === "no-verify") return latestVerifyRun === null;
 
-  const status = item.latest_run?.status;
-  if (filter === "pending") {
-    return status === "pending" || status === "running";
-  }
-
-  return status === filter;
+  return true;
 }
 
 function toPermissionDraft(permission: SystemServiceAuthPermissionDTO): PermissionDraft {
@@ -1236,23 +1287,34 @@ function SystemServiceAuthPermissionsPanel() {
 function WriteStatusSummary({
   items,
   recentRuns,
+  latestRuns,
 }: {
   items: SystemServiceAuthWriteStatusItemDTO[];
   recentRuns: SystemServiceAuthWriteRunDTO[];
+  latestRuns: LatestRunsByOperation;
 }) {
   const activePermissions = items.filter((item) => item.permission_active).length;
-  const successCount = items.filter((item) => item.latest_run?.status === "success").length;
-  const failureCount = items.filter((item) => item.latest_run?.status === "failure").length;
-  const pendingCount = items.filter(
-    (item) => item.latest_run?.status === "pending" || item.latest_run?.status === "running",
+  const applySuccessCount = items.filter(
+    (item) => latestRuns.applyByPermissionId.get(item.permission_id)?.status === "success",
   ).length;
-  const noRunCount = items.filter((item) => item.latest_run === null).length;
+  const verifySuccessCount = items.filter(
+    (item) => latestRuns.verifyByPermissionId.get(item.permission_id)?.status === "success",
+  ).length;
+  const applyFailureCount = items.filter(
+    (item) => latestRuns.applyByPermissionId.get(item.permission_id)?.status === "failure",
+  ).length;
+  const verifyFailureCount = items.filter(
+    (item) => latestRuns.verifyByPermissionId.get(item.permission_id)?.status === "failure",
+  ).length;
+  const noApplyCount = items.filter(
+    (item) => item.permission_active && !latestRuns.applyByPermissionId.has(item.permission_id),
+  ).length;
 
   return (
     <section className="admin-apps-card">
       <div className="admin-apps-profile-grid">
         <article className="admin-apps-profile-link">
-          <span>ERP 本地白名单</span>
+          <span>白名单总数</span>
           <strong>{items.length}</strong>
         </article>
         <article className="admin-apps-profile-link">
@@ -1261,19 +1323,23 @@ function WriteStatusSummary({
         </article>
         <article className="admin-apps-profile-link">
           <span>写入成功</span>
-          <strong>{successCount}</strong>
+          <strong>{applySuccessCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>校验成功</span>
+          <strong>{verifySuccessCount}</strong>
         </article>
         <article className="admin-apps-profile-link">
           <span>写入失败</span>
-          <strong>{failureCount}</strong>
+          <strong>{applyFailureCount}</strong>
         </article>
         <article className="admin-apps-profile-link">
-          <span>待执行 / 执行中</span>
-          <strong>{pendingCount}</strong>
+          <span>校验失败</span>
+          <strong>{verifyFailureCount}</strong>
         </article>
         <article className="admin-apps-profile-link">
           <span>未写入</span>
-          <strong>{noRunCount}</strong>
+          <strong>{noApplyCount}</strong>
         </article>
         <article className="admin-apps-profile-link">
           <span>最近记录</span>
@@ -1284,12 +1350,61 @@ function WriteStatusSummary({
   );
 }
 
+function RunMiniBlock({
+  emptyTextValue,
+  run,
+}: {
+  emptyTextValue: string;
+  run: SystemServiceAuthWriteRunDTO | null;
+}) {
+  if (!run) {
+    return <WarningPill text={emptyTextValue} />;
+  }
+
+  return (
+    <div className="admin-apps-stack">
+      <WriteStatusPill run={run} />
+      <div className="admin-apps-muted">
+        {operationText(run.operation)} · {run.status}
+      </div>
+      <div className="admin-apps-muted">HTTP：{emptyText(run.http_status)}</div>
+      <div className="admin-apps-muted">完成：{formatDateTime(run.finished_at)}</div>
+    </div>
+  );
+}
+
+function RunResponseLine({
+  label,
+  run,
+}: {
+  label: string;
+  run: SystemServiceAuthWriteRunDTO | null;
+}) {
+  if (!run) {
+    return <div className="admin-apps-muted">{label}：暂无</div>;
+  }
+
+  const excerpt = compactExcerpt(run.error_message ?? run.raw_excerpt);
+
+  return (
+    <div className="admin-apps-stack">
+      <div>
+        {label}：HTTP {emptyText(run.http_status)}
+      </div>
+      <div className="admin-apps-muted">目标：{emptyText(run.target_base_url)}</div>
+      {excerpt ? <div className="admin-apps-muted">摘要：{excerpt}</div> : null}
+    </div>
+  );
+}
+
 function WriteStatusTable({
   items,
+  latestRuns,
   loading,
   onRefresh,
 }: {
   items: SystemServiceAuthWriteStatusItemDTO[];
+  latestRuns: LatestRunsByOperation;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -1321,7 +1436,7 @@ function WriteStatusTable({
       <div className="admin-apps-table-header">
         <div>
           <h2>写入与校验记录</h2>
-          <p>展示每条本地访问白名单的最近一次写入记录。当前页面只读，不触发写回。</p>
+          <p>只读展示 ERP 本地白名单在目标系统的最近写入和读回校验结果。</p>
         </div>
         <div className="admin-apps-row-actions">
           <button
@@ -1339,17 +1454,19 @@ function WriteStatusTable({
         <table className="admin-apps-table">
           <thead>
             <tr>
-              <th>授权</th>
+              <th>来源系统身份 / 授权</th>
               <th>目标系统</th>
               <th>ERP 本地状态</th>
               <th>最近写入</th>
+              <th>最近校验</th>
               <th>目标响应</th>
               <th>时间</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => {
-              const run = item.latest_run;
+              const applyRun = latestRuns.applyByPermissionId.get(item.permission_id) ?? null;
+              const verifyRun = latestRuns.verifyByPermissionId.get(item.permission_id) ?? null;
 
               return (
                 <tr key={item.permission_id}>
@@ -1368,44 +1485,20 @@ function WriteStatusTable({
                     <BoolPill active={item.permission_active} />
                   </td>
                   <td>
-                    <WriteStatusPill run={run} />
-                    {run ? (
-                      <div className="admin-apps-muted">
-                        {operationText(run.operation)} · {run.status}
-                      </div>
-                    ) : (
-                      <div className="admin-apps-muted">尚未产生写入/校验执行记录</div>
-                    )}
+                    <RunMiniBlock emptyTextValue="未写入" run={applyRun} />
                   </td>
                   <td>
-                    {run ? (
-                      <>
-                        <div>HTTP：{emptyText(run.http_status)}</div>
-                        <div className="admin-apps-muted">
-                          目标：{emptyText(run.target_base_url)}
-                        </div>
-                        {run.error_message ? (
-                          <div className="admin-apps-muted">错误：{run.error_message}</div>
-                        ) : null}
-                        {run.raw_excerpt ? (
-                          <div className="admin-apps-muted">摘要：{run.raw_excerpt}</div>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span className="admin-apps-muted">暂无目标响应</span>
-                    )}
+                    <RunMiniBlock emptyTextValue="未校验" run={verifyRun} />
                   </td>
                   <td>
-                    {run ? (
-                      <>
-                        <div>开始：{formatDateTime(run.started_at)}</div>
-                        <div className="admin-apps-muted">
-                          完成：{formatDateTime(run.finished_at)}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="admin-apps-muted">暂无</span>
-                    )}
+                    <RunResponseLine label="写入" run={applyRun} />
+                    <RunResponseLine label="校验" run={verifyRun} />
+                  </td>
+                  <td>
+                    <div>写入：{formatDateTime(applyRun?.finished_at)}</div>
+                    <div className="admin-apps-muted">
+                      校验：{formatDateTime(verifyRun?.finished_at)}
+                    </div>
                   </td>
                 </tr>
               );
@@ -1503,18 +1596,26 @@ function SystemServiceAuthWriteStatusPanel() {
   const [targetAppCode, setTargetAppCode] = useState("");
   const [statusFilter, setStatusFilter] = useState<WriteStatusFilter>("all");
 
+  const latestRunsByOperation = useMemo(
+    () => buildLatestRunsByOperation(recentRuns),
+    [recentRuns],
+  );
+
   const sourceOptions = useMemo(() => buildSourceOptionsFromItems(items), [items]);
   const targetOptions = useMemo(() => buildTargetOptionsFromItems(items), [items]);
 
   const filteredItems = useMemo(
     () =>
       items.filter((item) => {
+        const latestApplyRun = latestRunsByOperation.applyByPermissionId.get(item.permission_id) ?? null;
+        const latestVerifyRun = latestRunsByOperation.verifyByPermissionId.get(item.permission_id) ?? null;
+
         if (sourceAppCode && item.source_app_code !== sourceAppCode) return false;
         if (targetAppCode && item.target_app_code !== targetAppCode) return false;
-        if (!matchesWriteStatusFilter(item, statusFilter)) return false;
+        if (!matchesWriteStatusFilter(statusFilter, latestApplyRun, latestVerifyRun)) return false;
         return matchesWriteStatusKeyword(item, keyword);
       }),
-    [items, keyword, sourceAppCode, statusFilter, targetAppCode],
+    [items, keyword, latestRunsByOperation, sourceAppCode, statusFilter, targetAppCode],
   );
 
   if (!canRead) {
@@ -1535,7 +1636,7 @@ function SystemServiceAuthWriteStatusPanel() {
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
       {loading ? <div className="admin-apps-alert">正在加载写入与校验记录…</div> : null}
 
-      <WriteStatusSummary items={items} recentRuns={recentRuns} />
+      <WriteStatusSummary items={items} latestRuns={latestRunsByOperation} recentRuns={recentRuns} />
 
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
@@ -1565,11 +1666,12 @@ function SystemServiceAuthWriteStatusPanel() {
               onChange={(event) => setStatusFilter(event.target.value as WriteStatusFilter)}
             >
               <option value="all">全部写入与校验记录</option>
-              <option value="success">成功</option>
-              <option value="failure">失败</option>
-              <option value="pending">待执行 / 执行中</option>
-              <option value="skipped">跳过</option>
-              <option value="no-run">未写入</option>
+              <option value="apply-success">写入成功</option>
+              <option value="verify-success">校验成功</option>
+              <option value="apply-failure">写入失败</option>
+              <option value="verify-failure">校验失败</option>
+              <option value="no-apply">未写入</option>
+              <option value="no-verify">未校验</option>
             </select>
             <input
               placeholder="搜索 client / 权限 / 响应"
@@ -1582,6 +1684,7 @@ function SystemServiceAuthWriteStatusPanel() {
 
       <WriteStatusTable
         items={filteredItems}
+        latestRuns={latestRunsByOperation}
         loading={loading}
         onRefresh={() => {
           void reload();
