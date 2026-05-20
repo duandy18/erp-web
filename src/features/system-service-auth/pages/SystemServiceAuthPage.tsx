@@ -569,7 +569,7 @@ function PermissionCreatePanel({
       clientId: parseClientId(selectedClientId),
       targetAppCode: requireTrimmed(selectedTargetAppCode, "请选择目标系统"),
       permissionCode: requireTrimmed(selectedPermissionCode, "请选择目标能力"),
-      description: requireTrimmed(finalDescription, "请填写授权说明"),
+      description: requireTrimmed(finalDescription, "请填写白名单说明"),
       isActive,
     });
 
@@ -580,8 +580,8 @@ function PermissionCreatePanel({
   return (
     <form className="admin-apps-card admin-apps-create-grid" onSubmit={handleSubmit}>
       <div className="admin-apps-form-intro">
-        <h2>新增调用授权</h2>
-        <p>只写入 ERP 本地授权表，不写入目标系统 service permission 表。</p>
+        <h2>新增访问白名单</h2>
+        <p>只写入 ERP ERP 本地白名单表，不写入目标系统 service permission 表。</p>
       </div>
 
       <label>
@@ -659,7 +659,7 @@ function PermissionCreatePanel({
       </label>
 
       <label className="admin-apps-wide">
-        <span>授权说明</span>
+        <span>白名单说明</span>
         <input
           placeholder={selectedCapability?.description ?? "说明该授权的业务用途"}
           value={description}
@@ -678,7 +678,7 @@ function PermissionCreatePanel({
           targetCapabilityOptions.length === 0
         }
       >
-        {creating ? "创建中…" : "创建授权"}
+        {creating ? "创建中…" : "创建白名单"}
       </button>
     </form>
   );
@@ -708,8 +708,8 @@ function PermissionTable({
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
-            <h2>调用授权列表</h2>
-            <p>暂无调用授权。请先创建本地授权记录。</p>
+            <h2>访问白名单列表</h2>
+            <p>暂无访问白名单。请先创建ERP 本地白名单记录。</p>
           </div>
           <div className="admin-apps-row-actions">
             <button
@@ -730,8 +730,8 @@ function PermissionTable({
     <section className="admin-apps-card">
       <div className="admin-apps-table-header">
         <div>
-          <h2>调用授权列表</h2>
-          <p>只管理 ERP 本地授权记录；是否已写入目标系统由“写入状态”页面处理。</p>
+          <h2>访问白名单列表</h2>
+          <p>只管理 ERP ERP 本地白名单记录；是否已写入目标系统由“写入与校验记录”页面处理。</p>
         </div>
         <div className="admin-apps-row-actions">
           <button
@@ -752,7 +752,7 @@ function PermissionTable({
               <th>来源 Client</th>
               <th>目标系统</th>
               <th>权限 / 能力</th>
-              <th>授权说明</th>
+              <th>白名单说明</th>
               <th>本地状态</th>
               <th>更新时间</th>
               <th>操作</th>
@@ -944,10 +944,10 @@ function SystemServiceAuthPermissionsPanel() {
         description: payload.description,
         is_active: payload.isActive,
       });
-      setMessage("调用授权已创建");
+      setMessage("访问白名单已创建");
     } catch (currentError) {
       setMessage(null);
-      setError(currentError instanceof Error ? currentError.message : "创建调用授权失败");
+      setError(currentError instanceof Error ? currentError.message : "创建访问白名单失败");
     }
   }
 
@@ -958,13 +958,13 @@ function SystemServiceAuthPermissionsPanel() {
 
     try {
       await updatePermission(permission.permission_id, {
-        description: requireTrimmed(draft.description, "请填写授权说明"),
+        description: requireTrimmed(draft.description, "请填写白名单说明"),
         is_active: draft.is_active,
       });
-      setMessage("调用授权已保存");
+      setMessage("访问白名单已保存");
     } catch (currentError) {
       setMessage(null);
-      setError(currentError instanceof Error ? currentError.message : "保存调用授权失败");
+      setError(currentError instanceof Error ? currentError.message : "保存访问白名单失败");
     }
   }
 
@@ -985,8 +985,8 @@ function SystemServiceAuthPermissionsPanel() {
     <div className="admin-apps-stack">
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
       {message ? <div className="admin-apps-alert">{message}</div> : null}
-      {loading ? <div className="admin-apps-alert">正在加载调用授权…</div> : null}
-      {!canManage ? <div className="admin-apps-alert">当前为只读模式，不能创建或修改调用授权。</div> : null}
+      {loading ? <div className="admin-apps-alert">正在加载访问白名单…</div> : null}
+      {!canManage ? <div className="admin-apps-alert">当前为只读模式，不能创建或修改访问白名单。</div> : null}
 
       {canManage ? (
         <PermissionCreatePanel
@@ -1000,8 +1000,8 @@ function SystemServiceAuthPermissionsPanel() {
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
-            <h2>调用授权筛选</h2>
-            <p>按来源系统、目标系统、启停状态或关键字筛选本地授权记录。</p>
+            <h2>访问白名单筛选</h2>
+            <p>按来源系统、目标系统、启停状态或关键字筛选ERP 本地白名单记录。</p>
           </div>
           <div className="admin-apps-toolbar">
             <select value={sourceAppCode} onChange={(event) => setSourceAppCode(event.target.value)}>
@@ -1069,7 +1069,7 @@ function WriteStatusSummary({
     <section className="admin-apps-card">
       <div className="admin-apps-profile-grid">
         <article className="admin-apps-profile-link">
-          <span>本地授权</span>
+          <span>ERP 本地白名单</span>
           <strong>{items.length}</strong>
         </article>
         <article className="admin-apps-profile-link">
@@ -1115,8 +1115,8 @@ function WriteStatusTable({
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
-            <h2>写入状态</h2>
-            <p>暂无本地授权记录。请先在“调用授权”页面创建授权。</p>
+            <h2>写入与校验记录</h2>
+            <p>暂无ERP 本地白名单记录。请先在“访问白名单”页面创建白名单。</p>
           </div>
           <div className="admin-apps-row-actions">
             <button
@@ -1137,8 +1137,8 @@ function WriteStatusTable({
     <section className="admin-apps-card">
       <div className="admin-apps-table-header">
         <div>
-          <h2>写入状态</h2>
-          <p>展示每条本地调用授权的最近一次写入记录。当前页面只读，不触发写回。</p>
+          <h2>写入与校验记录</h2>
+          <p>展示每条本地访问白名单的最近一次写入记录。当前页面只读，不触发写回。</p>
         </div>
         <div className="admin-apps-row-actions">
           <button
@@ -1191,7 +1191,7 @@ function WriteStatusTable({
                         {operationText(run.operation)} · {run.status}
                       </div>
                     ) : (
-                      <div className="admin-apps-muted">尚未产生写入执行记录</div>
+                      <div className="admin-apps-muted">尚未产生写入/校验执行记录</div>
                     )}
                   </td>
                   <td>
@@ -1240,7 +1240,7 @@ function RecentWriteRunsTable({ runs }: { runs: SystemServiceAuthWriteRunDTO[] }
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
-            <h2>最近写入记录</h2>
+            <h2>最近写入与校验记录</h2>
             <p>暂无写入记录。后续写回执行服务上线后会在这里显示执行历史。</p>
           </div>
         </div>
@@ -1252,8 +1252,8 @@ function RecentWriteRunsTable({ runs }: { runs: SystemServiceAuthWriteRunDTO[] }
     <section className="admin-apps-card">
       <div className="admin-apps-table-header">
         <div>
-          <h2>最近写入记录</h2>
-          <p>按执行时间倒序展示最近写入记录。</p>
+          <h2>最近写入与校验记录</h2>
+          <p>按执行时间倒序展示最近写入与校验记录。</p>
         </div>
       </div>
 
@@ -1350,15 +1350,15 @@ function SystemServiceAuthWriteStatusPanel() {
   return (
     <div className="admin-apps-stack">
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
-      {loading ? <div className="admin-apps-alert">正在加载写入状态…</div> : null}
+      {loading ? <div className="admin-apps-alert">正在加载写入与校验记录…</div> : null}
 
       <WriteStatusSummary items={items} recentRuns={recentRuns} />
 
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
-            <h2>写入状态筛选</h2>
-            <p>按来源系统、目标系统、写入状态或关键字筛选本地授权写入状态。</p>
+            <h2>写入与校验记录筛选</h2>
+            <p>按来源系统、目标系统、写入与校验记录或关键字筛选ERP 本地白名单写入与校验记录。</p>
           </div>
           <div className="admin-apps-toolbar">
             <select value={sourceAppCode} onChange={(event) => setSourceAppCode(event.target.value)}>
@@ -1381,7 +1381,7 @@ function SystemServiceAuthWriteStatusPanel() {
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value as WriteStatusFilter)}
             >
-              <option value="all">全部写入状态</option>
+              <option value="all">全部写入与校验记录</option>
               <option value="success">成功</option>
               <option value="failure">失败</option>
               <option value="pending">待执行 / 执行中</option>
