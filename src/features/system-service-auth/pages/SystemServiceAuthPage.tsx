@@ -866,7 +866,7 @@ function PermissionCreatePanel({
     <form className="admin-apps-card admin-apps-create-grid" onSubmit={handleSubmit}>
       <div className="admin-apps-form-intro">
         <h2>新增访问白名单</h2>
-        <p>只写入 ERP 本地白名单表；不会自动写入目标系统，写入和校验在“写入与校验记录”页面处理。</p>
+        <p>只写入 ERP 本地白名单表；创建后可在本页对该条白名单执行写入、校验或写入并校验，完整执行历史见“写入与校验记录”页面。</p>
       </div>
 
       <label>
@@ -1004,7 +1004,7 @@ function PermissionTable({
         <div className="admin-apps-table-header">
           <div>
             <h2>访问白名单列表</h2>
-            <p>暂无访问白名单。请先创建ERP 本地白名单记录。</p>
+            <p>暂无访问白名单。请先创建 ERP 本地白名单记录。</p>
           </div>
           <div className="admin-apps-row-actions">
             <button
@@ -1026,7 +1026,7 @@ function PermissionTable({
       <div className="admin-apps-table-header">
         <div>
           <h2>访问白名单列表</h2>
-          <p>只管理 ERP 本地白名单记录；是否已写入目标系统、是否校验成功，由“写入与校验记录”页面处理。</p>
+          <p>管理 ERP 本地白名单记录；本页可对单条白名单执行写入、校验或写入并校验，完整执行历史见“写入与校验记录”页面。</p>
         </div>
         <div className="admin-apps-row-actions">
           <button
