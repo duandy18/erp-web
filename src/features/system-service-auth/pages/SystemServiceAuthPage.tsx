@@ -25,6 +25,23 @@ type PermissionDraft = {
 };
 
 type PermissionDraftMap = Record<number, PermissionDraft>;
+type PermissionAction = "apply" | "verify" | "apply-verify";
+type RunningPermissionAction = {
+  action: PermissionAction;
+  permissionId: number;
+};
+
+type PermissionActionResultStatus = "running" | "success" | "failure";
+
+type PermissionActionResult = {
+  action: PermissionAction | "save";
+  status: PermissionActionResultStatus;
+  message: string;
+  detail?: string;
+};
+
+type PermissionActionResultMap = Record<number, PermissionActionResult>;
+
 
 type TargetAppOption = {
   code: string;
@@ -92,6 +109,51 @@ function CapabilityStatusPill({ active }: { active: boolean }) {
 
 function WarningPill({ text }: { text: string }) {
   return <span className="admin-apps-status muted">{text}</span>;
+}
+
+function permissionActionText(action: PermissionAction | "save"): string {
+  const map: Record<PermissionAction | "save", string> = {
+    "apply": "写入",
+    "apply-verify": "写入并校验",
+    "save": "保存",
+    "verify": "校验",
+  };
+
+  return map[action];
+}
+
+function permissionActionStatusText(status: PermissionActionResultStatus): string {
+  const map: Record<PermissionActionResultStatus, string> = {
+    failure: "失败",
+    running: "执行中",
+    success: "成功",
+  };
+
+  return map[status];
+}
+
+function PermissionActionResultCell({
+  result,
+}: {
+  result: PermissionActionResult | undefined;
+}) {
+  if (!result) {
+    return <span className="admin-apps-muted">暂无本页操作</span>;
+  }
+
+  const className =
+    result.status === "success" ? "admin-apps-status success" : "admin-apps-status muted";
+
+  return (
+    <div className="admin-apps-stack">
+      <span className={className}>
+        {permissionActionText(result.action)}
+        {permissionActionStatusText(result.status)}
+      </span>
+      <div className="admin-apps-muted">{result.message}</div>
+      {result.detail ? <div className="admin-apps-muted">{result.detail}</div> : null}
+    </div>
+  );
 }
 
 function WriteStatusPill({ run }: { run: SystemServiceAuthWriteRunDTO | null }) {
@@ -913,18 +975,28 @@ function PermissionTable({
   loading,
   mutating,
   canManage,
+  actionResults,
+  runningAction,
+  onApply,
+  onApplyAndVerify,
   onPatchDraft,
   onSave,
   onRefresh,
+  onVerify,
 }: {
   permissions: SystemServiceAuthPermissionDTO[];
   drafts: PermissionDraftMap;
   loading: boolean;
   mutating: boolean;
   canManage: boolean;
+  actionResults: PermissionActionResultMap;
+  runningAction: RunningPermissionAction | null;
+  onApply: (permissionId: number) => Promise<void>;
+  onApplyAndVerify: (permissionId: number) => Promise<void>;
   onPatchDraft: (permissionId: number, patch: Partial<PermissionDraft>) => void;
   onSave: (permission: SystemServiceAuthPermissionDTO) => Promise<void>;
   onRefresh: () => void;
+  onVerify: (permissionId: number) => Promise<void>;
 }) {
   if (permissions.length === 0) {
     return (
@@ -977,6 +1049,7 @@ function PermissionTable({
               <th>调用权限 / 目标能力</th>
               <th>白名单说明</th>
               <th>ERP 本地状态</th>
+              <th>操作结果</th>
               <th>更新时间</th>
               <th>操作</th>
             </tr>
@@ -986,6 +1059,10 @@ function PermissionTable({
               const draft = drafts[permission.permission_id] ?? toPermissionDraft(permission);
               const dirty = isPermissionDraftDirty(permission, draft);
               const capabilityMatched = permission.capability_code !== null;
+              const rowAction =
+                runningAction?.permissionId === permission.permission_id ? runningAction.action : null;
+              const commandDisabled = !canManage || mutating || dirty || rowAction !== null;
+              const actionResult = actionResults[permission.permission_id];
 
               return (
                 <tr key={permission.permission_id}>
@@ -1049,6 +1126,9 @@ function PermissionTable({
                     </div>
                   </td>
                   <td>
+                    <PermissionActionResultCell result={actionResult} />
+                  </td>
+                  <td>
                     <div>{formatDateTime(permission.updated_at)}</div>
                     <div className="admin-apps-muted">
                       创建：{formatDateTime(permission.created_at)}
@@ -1056,16 +1136,50 @@ function PermissionTable({
                     {dirty ? <div className="admin-apps-muted">本行有未保存修改</div> : null}
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      className="admin-apps-button secondary"
-                      disabled={!canManage || mutating || !dirty}
-                      onClick={() => {
-                        void onSave(permission);
-                      }}
-                    >
-                      保存
-                    </button>
+                    <div className="admin-apps-row-actions">
+                      <button
+                        type="button"
+                        className="admin-apps-button secondary"
+                        disabled={!canManage || mutating || !dirty}
+                        onClick={() => {
+                          void onSave(permission);
+                        }}
+                      >
+                        保存
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-apps-button secondary"
+                        disabled={commandDisabled}
+                        onClick={() => {
+                          void onApply(permission.permission_id);
+                        }}
+                      >
+                        {rowAction === "apply" ? "写入中…" : "写入"}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-apps-button secondary"
+                        disabled={commandDisabled}
+                        onClick={() => {
+                          void onVerify(permission.permission_id);
+                        }}
+                      >
+                        {rowAction === "verify" ? "校验中…" : "校验"}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-apps-button secondary"
+                        disabled={commandDisabled}
+                        onClick={() => {
+                          void onApplyAndVerify(permission.permission_id);
+                        }}
+                      >
+                        {rowAction === "apply-verify" ? "执行中…" : "写入并校验"}
+                      </button>
+                    </div>
+                    {dirty ? <div className="admin-apps-muted">先保存本行修改，再写入或校验。</div> : null}
+                    {!canManage ? <div className="admin-apps-muted">只读账号不能执行命令。</div> : null}
                   </td>
                 </tr>
               );
@@ -1092,6 +1206,8 @@ function SystemServiceAuthPermissionsPanel() {
     reload,
     createPermission,
     updatePermission,
+    applyPermission,
+    verifyPermission,
     setError,
   } = useSystemServiceAuthPermissions(token);
 
@@ -1101,6 +1217,9 @@ function SystemServiceAuthPermissionsPanel() {
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
   const [drafts, setDrafts] = useState<PermissionDraftMap>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [runningAction, setRunningAction] = useState<RunningPermissionAction | null>(null);
+  const [actionResults, setActionResults] = useState<PermissionActionResultMap>({});
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -1155,6 +1274,16 @@ function SystemServiceAuthPermissionsPanel() {
     }));
   }
 
+  function setPermissionActionResult(
+    permissionId: number,
+    result: PermissionActionResult,
+  ): void {
+    setActionResults((prev) => ({
+      ...prev,
+      [permissionId]: result,
+    }));
+  }
+
   async function handleCreate(payload: {
     clientId: number;
     targetAppCode: string;
@@ -1184,15 +1313,107 @@ function SystemServiceAuthPermissionsPanel() {
 
     const draft = drafts[permission.permission_id] ?? toPermissionDraft(permission);
 
+    setPermissionActionResult(permission.permission_id, {
+      action: "save",
+      status: "running",
+      message: "正在保存 ERP 本地白名单…",
+    });
+
     try {
       await updatePermission(permission.permission_id, {
         description: requireTrimmed(draft.description, "请填写白名单说明"),
         is_active: draft.is_active,
       });
+      setPermissionActionResult(permission.permission_id, {
+        action: "save",
+        status: "success",
+        message: "ERP 本地白名单已保存。",
+      });
       setMessage("访问白名单已保存");
     } catch (currentError) {
+      const detail = currentError instanceof Error ? currentError.message : "保存访问白名单失败";
+      setPermissionActionResult(permission.permission_id, {
+        action: "save",
+        status: "failure",
+        message: "保存失败。",
+        detail,
+      });
       setMessage(null);
-      setError(currentError instanceof Error ? currentError.message : "保存访问白名单失败");
+      setError(detail);
+    }
+  }
+
+  async function runPermissionAction(
+    permissionId: number,
+    action: PermissionAction,
+  ): Promise<void> {
+    if (!canManage) return;
+
+    setRunningAction({ permissionId, action });
+    setMessage(null);
+    setActionError(null);
+    setPermissionActionResult(permissionId, {
+      action,
+      status: "running",
+      message: `${permissionActionText(action)}正在执行…`,
+    });
+
+    try {
+      if (action === "apply") {
+        const run = await applyPermission(permissionId);
+        const success = run.status === "success";
+        setPermissionActionResult(permissionId, {
+          action,
+          status: success ? "success" : "failure",
+          message: `写入完成：${writeStatusText(run.status)}。`,
+          detail: `HTTP ${emptyText(run.http_status)} · ${emptyText(run.target_base_url)}`,
+        });
+        setMessage(`permission #${permissionId} 写入完成：${run.status}`);
+      } else if (action === "verify") {
+        const run = await verifyPermission(permissionId);
+        const success = run.status === "success";
+        setPermissionActionResult(permissionId, {
+          action,
+          status: success ? "success" : "failure",
+          message: `校验完成：${writeStatusText(run.status)}。`,
+          detail: `HTTP ${emptyText(run.http_status)} · ${emptyText(run.target_base_url)}`,
+        });
+        setMessage(`permission #${permissionId} 校验完成：${run.status}`);
+      } else {
+        const applyRun = await applyPermission(permissionId);
+
+        if (applyRun.status !== "success") {
+          setPermissionActionResult(permissionId, {
+            action,
+            status: "failure",
+            message: `写入完成：${writeStatusText(applyRun.status)}，未继续校验。`,
+            detail: `HTTP ${emptyText(applyRun.http_status)} · ${emptyText(applyRun.target_base_url)}`,
+          });
+          setMessage(`permission #${permissionId} 写入完成：${applyRun.status}，未继续校验`);
+          return;
+        }
+
+        const verifyRun = await verifyPermission(permissionId);
+        const success = verifyRun.status === "success";
+        setPermissionActionResult(permissionId, {
+          action,
+          status: success ? "success" : "failure",
+          message: `写入成功，校验完成：${writeStatusText(verifyRun.status)}。`,
+          detail: `HTTP ${emptyText(verifyRun.http_status)} · ${emptyText(verifyRun.target_base_url)}`,
+        });
+        setMessage(`permission #${permissionId} 写入成功，校验完成：${verifyRun.status}`);
+      }
+    } catch (currentError) {
+      const detail = currentError instanceof Error ? currentError.message : "执行写入与校验命令失败";
+      setPermissionActionResult(permissionId, {
+        action,
+        status: "failure",
+        message: `${permissionActionText(action)}失败。`,
+        detail,
+      });
+      setActionError(detail);
+    } finally {
+      setRunningAction(null);
     }
   }
 
@@ -1212,6 +1433,7 @@ function SystemServiceAuthPermissionsPanel() {
   return (
     <div className="admin-apps-stack">
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
+      {actionError ? <div className="admin-apps-alert danger">{actionError}</div> : null}
       {message ? <div className="admin-apps-alert">{message}</div> : null}
       {loading ? <div className="admin-apps-alert">正在加载访问白名单…</div> : null}
       {!canManage ? <div className="admin-apps-alert">当前为只读模式，不能创建或修改访问白名单。</div> : null}
@@ -1274,11 +1496,16 @@ function SystemServiceAuthPermissionsPanel() {
         loading={loading}
         mutating={mutating}
         canManage={canManage}
+        actionResults={actionResults}
+        runningAction={runningAction}
+        onApply={(permissionId) => runPermissionAction(permissionId, "apply")}
+        onApplyAndVerify={(permissionId) => runPermissionAction(permissionId, "apply-verify")}
         onPatchDraft={patchDraft}
         onSave={handleSave}
         onRefresh={() => {
           void reload();
         }}
+        onVerify={(permissionId) => runPermissionAction(permissionId, "verify")}
       />
     </div>
   );

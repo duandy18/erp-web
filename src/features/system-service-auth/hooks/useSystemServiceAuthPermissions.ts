@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
+  applySystemServiceAuthPermission,
   createSystemServiceAuthPermission,
   fetchSystemServiceAuthPermissions,
   updateSystemServiceAuthPermission,
+  verifySystemServiceAuthPermission,
 } from "../api/systemServiceAuthApi";
 import type {
   SystemServiceAuthCapabilityOptionDTO,
@@ -11,6 +13,7 @@ import type {
   SystemServiceAuthPermissionCreatePayload,
   SystemServiceAuthPermissionDTO,
   SystemServiceAuthPermissionUpdatePayload,
+  SystemServiceAuthWriteRunDTO,
 } from "../contracts/systemServiceAuth";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -107,6 +110,38 @@ export function useSystemServiceAuthPermissions(token: string | null) {
     }
   }
 
+  async function applyPermission(permissionId: number): Promise<SystemServiceAuthWriteRunDTO> {
+    setMutating(true);
+    setError(null);
+
+    try {
+      const run = await applySystemServiceAuthPermission(requireToken(), permissionId);
+      await load();
+      return run;
+    } catch (currentError) {
+      setError(errorMessage(currentError, "写入目标系统失败"));
+      throw currentError;
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function verifyPermission(permissionId: number): Promise<SystemServiceAuthWriteRunDTO> {
+    setMutating(true);
+    setError(null);
+
+    try {
+      const run = await verifySystemServiceAuthPermission(requireToken(), permissionId);
+      await load();
+      return run;
+    } catch (currentError) {
+      setError(errorMessage(currentError, "读回校验失败"));
+      throw currentError;
+    } finally {
+      setMutating(false);
+    }
+  }
+
   return {
     clients,
     capabilityOptions,
@@ -117,6 +152,8 @@ export function useSystemServiceAuthPermissions(token: string | null) {
     reload: load,
     createPermission,
     updatePermission,
+    applyPermission,
+    verifyPermission,
     setError,
   };
 }

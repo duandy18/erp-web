@@ -5,6 +5,7 @@ import type {
   SystemServiceAuthPermissionDTO,
   SystemServiceAuthPermissionListResponse,
   SystemServiceAuthPermissionUpdatePayload,
+  SystemServiceAuthWriteRunDTO,
   SystemServiceAuthWriteStatusListResponse,
 } from "../contracts/systemServiceAuth";
 
@@ -69,6 +70,32 @@ export function updateSystemServiceAuthPermission(
       method: "PATCH",
       token,
       body: payload,
+    },
+  );
+}
+
+export function applySystemServiceAuthPermission(
+  token: string,
+  permissionId: number,
+): Promise<SystemServiceAuthWriteRunDTO> {
+  return apiRequest<SystemServiceAuthWriteRunDTO>(
+    `/admin/system-service-auth/permissions/${permissionId}/apply`,
+    {
+      method: "POST",
+      token,
+    },
+  );
+}
+
+export function verifySystemServiceAuthPermission(
+  token: string,
+  permissionId: number,
+): Promise<SystemServiceAuthWriteRunDTO> {
+  return apiRequest<SystemServiceAuthWriteRunDTO>(
+    `/admin/system-service-auth/permissions/${permissionId}/verify`,
+    {
+      method: "POST",
+      token,
     },
   );
 }
