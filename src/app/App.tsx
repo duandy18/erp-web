@@ -19,6 +19,7 @@ import {
   SystemMonitoringOverviewPage,
   SystemMonitoringServiceAuthPage,
 } from "../features/system-monitoring/pages/SystemMonitoringPage";
+import { SystemServiceAuthContractsPage } from "../features/system-service-auth/pages/SystemServiceAuthContractsPage";
 import {
   SystemServiceAuthCapabilitiesPage,
   SystemServiceAuthPermissionsPage,
@@ -40,6 +41,10 @@ function AuthenticatedRoutes() {
         <Route path="/system/apps/frontend-pages" element={<SystemAppsFrontendPagesPage />} />
 
         <Route path="/system/service-auth" element={<SystemServiceAuthCapabilitiesPage />} />
+        <Route
+          path="/system/service-auth/contracts"
+          element={<SystemServiceAuthContractsPage />}
+        />
         <Route
           path="/system/service-auth/capabilities"
           element={<SystemServiceAuthCapabilitiesPage />}
