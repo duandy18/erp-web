@@ -128,7 +128,7 @@ function validatePath(value: string, message: string): string {
   const trimmed = requireTrimmed(value, message);
 
   if (!trimmed.startsWith("/")) {
-    throw new Error("Gateway 路径必须以 / 开头");
+    throw new Error("入口路径必须以 / 开头");
   }
 
   return trimmed;
@@ -138,7 +138,7 @@ function validateLocalUrl(value: string, message: string): string {
   const trimmed = requireTrimmed(value, message);
 
   if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-    throw new Error("本地地址必须以 http:// 或 https:// 开头");
+    throw new Error("本地调试 / 运行地址必须以 http:// 或 https:// 开头");
   }
 
   return trimmed;
@@ -266,10 +266,10 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         code,
         name: requireTrimmed(newName, "请填写系统名称"),
         description: requireTrimmed(newDescription, "请填写系统说明"),
-        web_path: validatePath(newWebPath, "请填写 Gateway Web 路径"),
-        api_path: validatePath(newApiPath, "请填写 Gateway API 路径"),
-        local_web_url: validateLocalUrl(newLocalWebUrl, "请填写本地 Web 地址"),
-        local_api_url: validateLocalUrl(newLocalApiUrl, "请填写本地 API 地址"),
+        web_path: validatePath(newWebPath, "请填写 Web 入口路径"),
+        api_path: validatePath(newApiPath, "请填写 API 入口路径"),
+        local_web_url: validateLocalUrl(newLocalWebUrl, "请填写本地 Web 调试地址"),
+        local_api_url: validateLocalUrl(newLocalApiUrl, "请填写本地 API 运行地址"),
         status: newStatus,
         sort_order: parseSortOrder(newSortOrder),
         is_active: newIsActive,
@@ -290,10 +290,10 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
       await updateApp(app.code, {
         name: requireTrimmed(draft.name, "请填写系统名称"),
         description: requireTrimmed(draft.description, "请填写系统说明"),
-        web_path: validatePath(draft.web_path, "请填写 Gateway Web 路径"),
-        api_path: validatePath(draft.api_path, "请填写 Gateway API 路径"),
-        local_web_url: validateLocalUrl(draft.local_web_url, "请填写本地 Web 地址"),
-        local_api_url: validateLocalUrl(draft.local_api_url, "请填写本地 API 地址"),
+        web_path: validatePath(draft.web_path, "请填写 Web 入口路径"),
+        api_path: validatePath(draft.api_path, "请填写 API 入口路径"),
+        local_web_url: validateLocalUrl(draft.local_web_url, "请填写本地 Web 调试地址"),
+        local_api_url: validateLocalUrl(draft.local_api_url, "请填写本地 API 运行地址"),
         status: draft.status,
         sort_order: parseSortOrder(draft.sort_order),
         is_active: draft.is_active,
@@ -381,7 +381,9 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         <form className="admin-apps-card admin-apps-create-grid" onSubmit={handleCreate}>
           <div className="admin-apps-form-intro">
             <h2>创建独立系统</h2>
-            <p>系统编码创建后不可修改。启用 / 停用只影响 is_active，不会写入 status。</p>
+            <p>
+              登记 ERP 控制面入口和本地调试 / 运行配置。Manifest V2 自描述内容以同步结果为准。
+            </p>
           </div>
 
           <label>
@@ -408,8 +410,8 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
               value={newStatus}
               onChange={(event) => setNewStatus(event.target.value as AdminAppStatus)}
             >
-              <option value="planned">planned</option>
-              <option value="ready">ready</option>
+              <option value="planned">规划中</option>
+              <option value="ready">已就绪</option>
             </select>
           </label>
 
@@ -437,7 +439,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <label>
-            <span>Gateway Web</span>
+            <span>Web 入口路径</span>
             <input
               placeholder="/billing"
               value={newWebPath}
@@ -446,7 +448,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <label>
-            <span>Gateway API</span>
+            <span>API 入口路径</span>
             <input
               placeholder="/api/billing"
               value={newApiPath}
@@ -455,7 +457,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <label>
-            <span>Local Web</span>
+            <span>本地 Web 调试地址</span>
             <input
               placeholder="http://127.0.0.1:5178"
               value={newLocalWebUrl}
@@ -464,7 +466,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
           </label>
 
           <label>
-            <span>Local API</span>
+            <span>本地 API 运行地址</span>
             <input
               placeholder="http://127.0.0.1:8025"
               value={newLocalApiUrl}
@@ -482,12 +484,15 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         <div className="admin-apps-table-header">
           <div>
             <h2>独立系统列表</h2>
-            <p>管理 ERP 控制面中的系统入口、API 路径、本地端口合同、启停状态和自描述同步。</p>
+            <p>
+              管理系统入口路径、本地调试 / 运行配置、启停状态和自描述同步。应用自描述内容以
+              Manifest V2 同步页为准。
+            </p>
           </div>
 
           <div className="admin-apps-toolbar">
             <input
-              placeholder="搜索编码 / 名称 / 路径"
+              placeholder="搜索编码 / 名称 / 入口路径 / 本地运行地址"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
@@ -496,8 +501,8 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
               onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
             >
               <option value="all">全部状态</option>
-              <option value="ready">ready</option>
-              <option value="planned">planned</option>
+              <option value="ready">已就绪</option>
+              <option value="planned">规划中</option>
             </select>
             <select
               value={activeFilter}
@@ -518,8 +523,8 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
               <tr>
                 <th>系统</th>
                 <th>说明</th>
-                <th>Gateway</th>
-                <th>本地地址</th>
+                <th>统一入口</th>
+                <th>本地运行配置</th>
                 <th>状态</th>
                 <th>排序</th>
                 <th>启停</th>
@@ -562,6 +567,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         />
                       </td>
                       <td>
+                        <div className="admin-apps-muted">Web 入口路径</div>
                         <input
                           value={draft.web_path}
                           disabled={!canManage || mutating || isSyncing}
@@ -569,6 +575,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                             patchDraft(app.code, { web_path: event.target.value })
                           }
                         />
+                        <div className="admin-apps-muted">API 入口路径</div>
                         <input
                           value={draft.api_path}
                           disabled={!canManage || mutating || isSyncing}
@@ -578,6 +585,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         />
                       </td>
                       <td>
+                        <div className="admin-apps-muted">本地 Web 调试地址</div>
                         <input
                           value={draft.local_web_url}
                           disabled={!canManage || mutating || isSyncing}
@@ -585,6 +593,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                             patchDraft(app.code, { local_web_url: event.target.value })
                           }
                         />
+                        <div className="admin-apps-muted">本地 API 运行地址</div>
                         <input
                           value={draft.local_api_url}
                           disabled={!canManage || mutating || isSyncing}
@@ -601,8 +610,8 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                             patchDraft(app.code, { status: event.target.value as AdminAppStatus })
                           }
                         >
-                          <option value="ready">ready</option>
-                          <option value="planned">planned</option>
+                          <option value="ready">已就绪</option>
+                          <option value="planned">规划中</option>
                         </select>
                       </td>
                       <td>
