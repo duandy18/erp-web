@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 
 import "../../app-registry/admin-apps/adminApps.css";
 import { useSessionRuntime } from "../../iam/runtime/useSessionRuntime";
@@ -13,6 +13,30 @@ import { useSystemServiceAuthContracts } from "../hooks/useSystemServiceAuthCont
 type Option = {
   code: string;
   name: string;
+};
+
+const fixedTableStyle: CSSProperties = {
+  tableLayout: "fixed",
+  width: "100%",
+  minWidth: 0,
+};
+
+const topCellStyle: CSSProperties = {
+  verticalAlign: "top",
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const compactCodeStyle: CSSProperties = {
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  lineHeight: 1.5,
+};
+
+const compactStackStyle: CSSProperties = {
+  gap: "0.35rem",
 };
 
 function formatDateTime(value: string | null | undefined): string {
@@ -71,6 +95,26 @@ function statusText(status: string): string {
   return map[status] ?? status;
 }
 
+function operationText(operation: string): string {
+  const map: Record<string, string> = {
+    disable: "停用",
+    upsert: "写入",
+    verify: "校验",
+  };
+
+  return map[operation] ?? operation;
+}
+
+function runStatusText(status: string): string {
+  const map: Record<string, string> = {
+    failure: "失败",
+    running: "执行中",
+    success: "成功",
+  };
+
+  return map[status] ?? status;
+}
+
 function StatusPill({ status }: { status: string }) {
   return (
     <span className={status === "ok" ? "admin-apps-status success" : "admin-apps-status muted"}>
@@ -79,19 +123,36 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function BoolText({ value }: { value: boolean | null }) {
-  if (value === null) return <span className="admin-apps-muted">-</span>;
+function BoolLabel({
+  value,
+  trueText,
+  falseText,
+}: {
+  value: boolean | null | undefined;
+  trueText: string;
+  falseText: string;
+}) {
+  if (value === null || value === undefined) {
+    return <span className="admin-apps-muted">-</span>;
+  }
 
   return (
     <span className={value ? "admin-apps-status success" : "admin-apps-status muted"}>
-      {value ? "是" : "否"}
+      {value ? trueText : falseText}
     </span>
   );
 }
 
-function writeRunText(run: SystemServiceAuthContractWriteRunDTO | null): string {
+function isAppRegistrationContract(contract: SystemServiceAuthContractDTO): boolean {
+  return contract.contract_type === "app_registration";
+}
+
+function writeRunSummary(run: SystemServiceAuthContractWriteRunDTO | null): string {
   if (!run) return "暂无";
-  return `${run.operation} / ${run.status} / HTTP ${emptyText(run.http_status)}`;
+
+  return `${operationText(run.operation)}${runStatusText(run.status)} · HTTP ${emptyText(
+    run.http_status,
+  )}`;
 }
 
 function endpointText(endpoint: SystemServiceAuthContractEndpointDTO): string {
@@ -150,11 +211,22 @@ function matchesKeyword(contract: SystemServiceAuthContractDTO, keyword: string)
     contract.source_app_name,
     contract.target_app_code,
     contract.target_app_name,
+    contract.web_path ?? "",
+    contract.api_path ?? "",
+    contract.env_code ?? "",
+    contract.deployment_mode ?? "",
+    contract.control_base_url ?? "",
+    contract.internal_api_base_url ?? "",
+    contract.public_web_url ?? "",
+    contract.public_api_base_url ?? "",
+    contract.service_client_code ?? "",
+    contract.service_client_header ?? "",
     contract.dependency_code ?? "",
     contract.dependency_name ?? "",
     contract.dependency_description ?? "",
     contract.target_capability_code ?? "",
     contract.target_capability_name ?? "",
+    contract.target_resource_code ?? "",
     contract.required_permission_code ?? "",
     contract.client_code ?? "",
     contract.required_config_keys.join(" "),
@@ -166,36 +238,6 @@ function matchesKeyword(contract: SystemServiceAuthContractDTO, keyword: string)
     .toLowerCase();
 
   return haystack.includes(normalizedKeyword);
-}
-
-function DetailList({
-  title,
-  items,
-}: {
-  title: string;
-  items: string[];
-}) {
-  const compactItems = items.filter((item) => item.trim() !== "");
-
-  if (compactItems.length === 0) {
-    return <div className="admin-apps-muted">{title}：暂无</div>;
-  }
-
-  return (
-    <div className="admin-apps-stack">
-      <div className="admin-apps-muted">
-        {title}：共 {compactItems.length} 项
-      </div>
-      {compactItems.slice(0, 4).map((item) => (
-        <div key={item} className="admin-apps-code">
-          {item}
-        </div>
-      ))}
-      {compactItems.length > 4 ? (
-        <div className="admin-apps-muted">还有 {compactItems.length - 4} 项未展开</div>
-      ) : null}
-    </div>
-  );
 }
 
 function ContractsSummary({ contracts }: { contracts: SystemServiceAuthContractDTO[] }) {
@@ -250,6 +292,252 @@ function ContractsSummary({ contracts }: { contracts: SystemServiceAuthContractD
   );
 }
 
+function ContractIdentityCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  return (
+    <div className="admin-apps-stack" style={compactStackStyle}>
+      <strong>{contract.contract_name}</strong>
+      <div className="admin-apps-code" style={compactCodeStyle}>
+        {contract.contract_code}
+      </div>
+      <div className="admin-apps-muted">
+        {scopeText(contract.contract_scope)} · {contractTypeText(contract.contract_type)}
+      </div>
+    </div>
+  );
+}
+
+function SourceDependencyCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  if (isAppRegistrationContract(contract)) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        <strong>{contract.source_app_code}</strong>
+        <div>{contract.source_app_name}</div>
+        <div className="admin-apps-muted">
+          部署：{emptyText(contract.env_code)} / {emptyText(contract.deployment_mode)}
+        </div>
+        <div className="admin-apps-muted">入口：{emptyText(contract.web_path)}</div>
+        <div className="admin-apps-muted">API 路径：{emptyText(contract.api_path)}</div>
+        <div className="admin-apps-muted">声明方式：Manifest V2</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-apps-stack" style={compactStackStyle}>
+      <strong>{contract.source_app_code}</strong>
+      <div>{contract.source_app_name}</div>
+      <div>
+        <span className="admin-apps-muted">Client：</span>
+        {emptyText(contract.client_code)}
+      </div>
+      <div className="admin-apps-code" style={compactCodeStyle}>
+        {emptyText(contract.dependency_code)}
+      </div>
+      <div className="admin-apps-muted">
+        依赖状态：
+        <BoolLabel value={contract.dependency_active} trueText="启用" falseText="停用" />
+      </div>
+    </div>
+  );
+}
+
+function TargetCapabilityCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  if (isAppRegistrationContract(contract)) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        <strong>Manifest V2</strong>
+        <div>
+          <span className="admin-apps-muted">控制面：</span>
+          {emptyText(contract.control_base_url)}
+        </div>
+        <div>
+          <span className="admin-apps-muted">内部 API：</span>
+          {emptyText(contract.internal_api_base_url)}
+        </div>
+        <div>
+          <span className="admin-apps-muted">公共 Web：</span>
+          {emptyText(contract.public_web_url)}
+        </div>
+        <div>
+          <span className="admin-apps-muted">系统身份：</span>
+          {emptyText(contract.service_client_code)}
+        </div>
+        <div>
+          <span className="admin-apps-muted">Header：</span>
+          {emptyText(contract.service_client_header)}
+        </div>
+      </div>
+    );
+  }
+
+  const hasCapability = Boolean(contract.target_capability_code);
+
+  return (
+    <div className="admin-apps-stack" style={compactStackStyle}>
+      <strong>{contract.target_app_code}</strong>
+      <div>{contract.target_app_name}</div>
+      {hasCapability ? (
+        <>
+          <div className="admin-apps-code" style={compactCodeStyle}>
+            {contract.target_capability_code}
+          </div>
+          <div>{emptyText(contract.target_capability_name)}</div>
+          <div className="admin-apps-muted">资源：{emptyText(contract.target_resource_code)}</div>
+          <div className="admin-apps-muted">
+            能力：
+            <BoolLabel value={contract.target_capability_exists} trueText="已声明" falseText="未声明" />
+          </div>
+          <div className="admin-apps-muted">
+            状态：
+            <BoolLabel
+              value={contract.target_capability_active}
+              trueText="提供中"
+              falseText="已停用"
+            />
+          </div>
+        </>
+      ) : (
+        <div className="admin-apps-muted">不依赖目标 capability</div>
+      )}
+    </div>
+  );
+}
+
+function CapabilityRouteBlock({ route }: { route: SystemServiceAuthContractRouteDTO }) {
+  return (
+    <div className="admin-apps-code" style={compactCodeStyle}>
+      <div>
+        {route.http_method} {route.path}
+      </div>
+      <div>{route.route_name}</div>
+      <div>系统身份校验：{route.auth_required ? "需要" : "不需要"}</div>
+      <div>接口状态：{route.is_active ? "提供中" : "已停用"}</div>
+    </div>
+  );
+}
+
+function DependencyEndpointBlock({ endpoint }: { endpoint: SystemServiceAuthContractEndpointDTO }) {
+  return (
+    <div className="admin-apps-code" style={compactCodeStyle}>
+      <div>
+        {endpoint.http_method} {endpoint.path}
+      </div>
+      <div>用途：{emptyText(endpoint.purpose)}</div>
+      <div>同步时间：{formatDateTime(endpoint.last_synced_at)}</div>
+    </div>
+  );
+}
+
+function InterfaceRoutesCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  if (contract.capability_routes.length > 0) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        {contract.capability_routes.map((route) => (
+          <CapabilityRouteBlock
+            key={`${contract.contract_code}:${route.http_method}:${route.path}:${route.route_name}`}
+            route={route}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (contract.dependency_endpoints.length > 0) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        {isAppRegistrationContract(contract) ? (
+          <strong className="admin-apps-muted">自描述接口</strong>
+        ) : null}
+        {contract.dependency_endpoints.map((endpoint) => (
+          <DependencyEndpointBlock
+            key={`${contract.contract_code}:${endpoint.http_method}:${endpoint.path}:${endpoint.purpose ?? ""}`}
+            endpoint={endpoint}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return <span className="admin-apps-muted">未声明接口路由</span>;
+}
+
+function PermissionCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  if (isAppRegistrationContract(contract)) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        <strong>不适用</strong>
+        <div className="admin-apps-muted">应用注册合同不通过访问白名单授权。</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-apps-stack" style={compactStackStyle}>
+      <div>
+        白名单：
+        <BoolLabel value={contract.permission_configured} trueText="已配置" falseText="缺失" />
+      </div>
+      <div>
+        本地：
+        <BoolLabel value={contract.permission_active} trueText="启用" falseText="停用" />
+      </div>
+      <div>
+        <span className="admin-apps-muted">Client：</span>
+        {emptyText(contract.client_code)}
+      </div>
+      <div className="admin-apps-code" style={compactCodeStyle}>
+        {emptyText(contract.required_permission_code)}
+      </div>
+      <div className="admin-apps-muted">permission #{emptyText(contract.permission_id)}</div>
+    </div>
+  );
+}
+
+function WriteVerifyCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  if (isAppRegistrationContract(contract)) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        <strong>不适用</strong>
+        <div className="admin-apps-muted">应用注册合同通过自描述同步确认。</div>
+        <div className="admin-apps-muted">
+          同步时间：{formatDateTime(contract.manifest_synced_at)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-apps-stack" style={compactStackStyle}>
+      <div>写入：{writeRunSummary(contract.latest_apply_run)}</div>
+      <div>校验：{writeRunSummary(contract.latest_verify_run)}</div>
+      <div className="admin-apps-muted">
+        写入时间：{formatDateTime(contract.latest_apply_run?.finished_at)}
+      </div>
+      <div className="admin-apps-muted">
+        校验时间：{formatDateTime(contract.latest_verify_run?.finished_at)}
+      </div>
+    </div>
+  );
+}
+
+function HealthCell({ contract }: { contract: SystemServiceAuthContractDTO }) {
+  if (isAppRegistrationContract(contract)) {
+    return (
+      <div className="admin-apps-stack" style={compactStackStyle}>
+        <StatusPill status={contract.contract_status} />
+        <div>{contract.issue_summary ?? "应用自描述已同步"}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="admin-apps-stack" style={compactStackStyle}>
+      <StatusPill status={contract.contract_status} />
+      <div>{contract.issue_summary ?? "全部正常"}</div>
+    </div>
+  );
+}
+
 function ContractsTable({
   contracts,
   loading,
@@ -287,7 +575,7 @@ function ContractsTable({
       <div className="admin-apps-table-header">
         <div>
           <h2>合同目录</h2>
-          <p>只读聚合展示应用注册、依赖声明、目标能力、访问白名单以及写入/校验状态。</p>
+          <p>只读全景表：每条合同一行，接口路由完整高行展开。</p>
         </div>
         <div className="admin-apps-row-actions">
           <button
@@ -302,92 +590,50 @@ function ContractsTable({
       </div>
 
       <div className="admin-apps-table-wrap">
-        <table className="admin-apps-table">
+        <table className="admin-apps-table" style={fixedTableStyle}>
+          <colgroup>
+            <col style={{ width: "20%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "28%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "9%" }} />
+          </colgroup>
           <thead>
             <tr>
-              <th>合同</th>
-              <th>来源 / 目标</th>
-              <th>依赖 / 能力</th>
-              <th>访问白名单</th>
-              <th>写入 / 校验</th>
-              <th>接口</th>
-              <th>状态</th>
+              <th style={topCellStyle}>合同名称</th>
+              <th style={topCellStyle}>来源依赖</th>
+              <th style={topCellStyle}>目标能力</th>
+              <th style={topCellStyle}>接口路由</th>
+              <th style={topCellStyle}>访问白名单</th>
+              <th style={topCellStyle}>写入 / 校验</th>
+              <th style={topCellStyle}>健康结论</th>
             </tr>
           </thead>
           <tbody>
             {contracts.map((contract) => (
               <tr key={contract.contract_code}>
-                <td>
-                  <div className="admin-apps-code">{contract.contract_code}</div>
-                  <div>{contract.contract_name}</div>
-                  <div className="admin-apps-muted">
-                    {scopeText(contract.contract_scope)} · {contractTypeText(contract.contract_type)}
-                  </div>
+                <td style={topCellStyle}>
+                  <ContractIdentityCell contract={contract} />
                 </td>
-                <td>
-                  <div>
-                    <span className="admin-apps-code">{contract.source_app_code}</span>
-                    <span> → </span>
-                    <span className="admin-apps-code">{contract.target_app_code}</span>
-                  </div>
-                  <div className="admin-apps-muted">{contract.source_app_name}</div>
-                  <div className="admin-apps-muted">{contract.target_app_name}</div>
-                  {contract.web_path || contract.api_path ? (
-                    <div className="admin-apps-muted">
-                      {emptyText(contract.web_path)} / {emptyText(contract.api_path)}
-                    </div>
-                  ) : null}
+                <td style={topCellStyle}>
+                  <SourceDependencyCell contract={contract} />
                 </td>
-                <td>
-                  <div className="admin-apps-code">
-                    {emptyText(contract.dependency_code ?? contract.target_capability_code)}
-                  </div>
-                  <div>{emptyText(contract.dependency_name ?? contract.target_capability_name)}</div>
-                  <div className="admin-apps-muted">
-                    能力：{emptyText(contract.target_capability_code)}
-                  </div>
-                  <div className="admin-apps-muted">
-                    权限：{emptyText(contract.required_permission_code)}
-                  </div>
-                  <div className="admin-apps-muted">
-                    目标能力存在：<BoolText value={contract.target_capability_exists} />
-                  </div>
+                <td style={topCellStyle}>
+                  <TargetCapabilityCell contract={contract} />
                 </td>
-                <td>
-                  <div>Client：{emptyText(contract.client_code)}</div>
-                  <div>
-                    已配置：<BoolText value={contract.permission_configured} />
-                  </div>
-                  <div>
-                    启用：<BoolText value={contract.permission_active} />
-                  </div>
-                  <div className="admin-apps-muted">
-                    permission #{emptyText(contract.permission_id)}
-                  </div>
+                <td style={topCellStyle}>
+                  <InterfaceRoutesCell contract={contract} />
                 </td>
-                <td>
-                  <div>写入：{writeRunText(contract.latest_apply_run)}</div>
-                  <div>校验：{writeRunText(contract.latest_verify_run)}</div>
-                  <div className="admin-apps-muted">
-                    同步：
-                    {formatDateTime(contract.dependency_last_synced_at ?? contract.manifest_synced_at)}
-                  </div>
+                <td style={topCellStyle}>
+                  <PermissionCell contract={contract} />
                 </td>
-                <td>
-                  <DetailList
-                    title="依赖端点"
-                    items={contract.dependency_endpoints.map(
-                      (endpoint) => `${endpoint.http_method} ${endpoint.path}`,
-                    )}
-                  />
-                  <DetailList
-                    title="能力路由"
-                    items={contract.capability_routes.map((route) => `${route.http_method} ${route.path}`)}
-                  />
+                <td style={topCellStyle}>
+                  <WriteVerifyCell contract={contract} />
                 </td>
-                <td>
-                  <StatusPill status={contract.contract_status} />
-                  <div className="admin-apps-muted">{contract.issue_summary ?? "无问题"}</div>
+                <td style={topCellStyle}>
+                  <HealthCell contract={contract} />
                 </td>
               </tr>
             ))}
@@ -510,7 +756,7 @@ export function SystemServiceAuthContractsPage() {
               ))}
             </select>
             <input
-              placeholder="搜索合同 / 能力 / 端点 / 问题"
+              placeholder="搜索合同 / 能力 / 接口 / 问题"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
