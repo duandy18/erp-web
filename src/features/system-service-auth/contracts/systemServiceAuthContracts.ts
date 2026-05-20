@@ -42,7 +42,14 @@ export type SystemServiceAuthContractDTO = {
   app_active: boolean | null;
   web_path: string | null;
   api_path: string | null;
-  local_api_url: string | null;
+  env_code: string | null;
+  deployment_mode: string | null;
+  control_base_url: string | null;
+  internal_api_base_url: string | null;
+  public_web_url: string | null;
+  public_api_base_url: string | null;
+  service_client_code: string | null;
+  service_client_header: string | null;
   manifest_synced_at: string | null;
 
   dependency_code: string | null;
