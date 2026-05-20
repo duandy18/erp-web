@@ -616,6 +616,73 @@ function SystemServiceAuthCapabilitiesPanel() {
   );
 }
 
+function AccessWhitelistSummary({
+  clients,
+  capabilityOptions,
+  permissions,
+}: {
+  clients: SystemServiceAuthClientDTO[];
+  capabilityOptions: SystemServiceAuthCapabilityOptionDTO[];
+  permissions: SystemServiceAuthPermissionDTO[];
+}) {
+  const activePermissionCount = permissions.filter((permission) => permission.is_active).length;
+  const inactivePermissionCount = permissions.length - activePermissionCount;
+  const matchedCapabilityCount = permissions.filter(
+    (permission) => permission.capability_code !== null,
+  ).length;
+  const missingCapabilityCount = permissions.length - matchedCapabilityCount;
+  const sourceSystemCount = new Set(permissions.map((permission) => permission.source_app_code)).size;
+  const targetSystemCount = new Set(permissions.map((permission) => permission.target_app_code)).size;
+  const activeClientCount = clients.filter((client) => client.is_active).length;
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-profile-grid">
+        <article className="admin-apps-profile-link">
+          <span>白名单总数</span>
+          <strong>{permissions.length}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>本地启用</span>
+          <strong>{activePermissionCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>本地停用</span>
+          <strong>{inactivePermissionCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>来源系统</span>
+          <strong>{sourceSystemCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>目标系统</span>
+          <strong>{targetSystemCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>系统身份</span>
+          <strong>{clients.length}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>启用身份</span>
+          <strong>{activeClientCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>可授权能力</span>
+          <strong>{capabilityOptions.length}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>能力匹配</span>
+          <strong>{matchedCapabilityCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>缺目标能力</span>
+          <strong>{missingCapabilityCount}</strong>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 function PermissionCreatePanel({
   clients,
   capabilityOptions,
@@ -686,11 +753,11 @@ function PermissionCreatePanel({
     <form className="admin-apps-card admin-apps-create-grid" onSubmit={handleSubmit}>
       <div className="admin-apps-form-intro">
         <h2>新增访问白名单</h2>
-        <p>只写入 ERP ERP 本地白名单表，不写入目标系统 service permission 表。</p>
+        <p>只写入 ERP 本地白名单表；不会自动写入目标系统，写入和校验在“写入与校验记录”页面处理。</p>
       </div>
 
       <label>
-        <span>来源 Client</span>
+        <span>来源系统身份</span>
         <select
           value={selectedClientId}
           disabled={creating || clients.length === 0}
@@ -699,7 +766,7 @@ function PermissionCreatePanel({
           {clients.length === 0 ? <option value="">暂无 Service Client</option> : null}
           {clients.map((client) => (
             <option key={client.client_id} value={client.client_id}>
-              {client.client_code} · {client.app_name}
+              {client.client_code} · {client.app_name} · {client.is_active ? "身份启用" : "身份停用"}
             </option>
           ))}
         </select>
@@ -726,7 +793,7 @@ function PermissionCreatePanel({
       </label>
 
       <label className="admin-apps-wide">
-        <span>目标能力</span>
+        <span>目标能力 / 调用权限</span>
         <select
           value={selectedPermissionCode}
           disabled={creating || targetCapabilityOptions.length === 0}
@@ -760,7 +827,7 @@ function PermissionCreatePanel({
           disabled={creating}
           onChange={(event) => setIsActive(event.target.checked)}
         />
-        <span>本地启用</span>
+        <span>创建后本地启用</span>
       </label>
 
       <label className="admin-apps-wide">
@@ -836,7 +903,7 @@ function PermissionTable({
       <div className="admin-apps-table-header">
         <div>
           <h2>访问白名单列表</h2>
-          <p>只管理 ERP ERP 本地白名单记录；是否已写入目标系统由“写入与校验记录”页面处理。</p>
+          <p>只管理 ERP 本地白名单记录；是否已写入目标系统、是否校验成功，由“写入与校验记录”页面处理。</p>
         </div>
         <div className="admin-apps-row-actions">
           <button
@@ -854,11 +921,11 @@ function PermissionTable({
         <table className="admin-apps-table">
           <thead>
             <tr>
-              <th>来源 Client</th>
+              <th>来源系统身份</th>
               <th>目标系统</th>
-              <th>权限 / 能力</th>
+              <th>调用权限 / 目标能力</th>
               <th>白名单说明</th>
-              <th>本地状态</th>
+              <th>ERP 本地状态</th>
               <th>更新时间</th>
               <th>操作</th>
             </tr>
@@ -876,14 +943,16 @@ function PermissionTable({
                       {permission.client_code ?? `client:${permission.client_id}`}
                     </div>
                     <div>{permission.source_app_name}</div>
-                    <div className="admin-apps-muted">{permission.source_app_code}</div>
+                    <div className="admin-apps-muted">来源系统：{permission.source_app_code}</div>
+                    <div className="admin-apps-muted">client #{permission.client_id}</div>
                   </td>
                   <td>
                     <div className="admin-apps-code">{permission.target_app_code}</div>
                     <div>{permission.target_app_name}</div>
                   </td>
                   <td>
-                    <div>{permission.permission_code}</div>
+                    <div className="admin-apps-code">{permission.permission_code}</div>
+                    <div className="admin-apps-muted">调用授权码</div>
                     {capabilityMatched ? (
                       <>
                         <div className="admin-apps-muted">{permission.capability_code}</div>
@@ -919,8 +988,11 @@ function PermissionTable({
                           })
                         }
                       />
-                      <span>{draft.is_active ? "启用" : "停用"}</span>
+                      <span>{draft.is_active ? "本地启用" : "本地停用"}</span>
                     </label>
+                    <div className="admin-apps-muted">
+                      当前保存状态：{permission.is_active ? "启用" : "停用"}
+                    </div>
                     <div>
                       <BoolPill active={permission.is_active} />
                     </div>
@@ -1093,6 +1165,12 @@ function SystemServiceAuthPermissionsPanel() {
       {loading ? <div className="admin-apps-alert">正在加载访问白名单…</div> : null}
       {!canManage ? <div className="admin-apps-alert">当前为只读模式，不能创建或修改访问白名单。</div> : null}
 
+      <AccessWhitelistSummary
+        clients={clients}
+        capabilityOptions={capabilityOptions}
+        permissions={permissions}
+      />
+
       {canManage ? (
         <PermissionCreatePanel
           clients={clients}
@@ -1106,7 +1184,7 @@ function SystemServiceAuthPermissionsPanel() {
         <div className="admin-apps-table-header">
           <div>
             <h2>访问白名单筛选</h2>
-            <p>按来源系统、目标系统、启停状态或关键字筛选ERP 本地白名单记录。</p>
+            <p>按来源系统、目标系统、ERP 本地启停状态或关键字筛选白名单记录。</p>
           </div>
           <div className="admin-apps-toolbar">
             <select value={sourceAppCode} onChange={(event) => setSourceAppCode(event.target.value)}>
@@ -1221,7 +1299,7 @@ function WriteStatusTable({
         <div className="admin-apps-table-header">
           <div>
             <h2>写入与校验记录</h2>
-            <p>暂无ERP 本地白名单记录。请先在“访问白名单”页面创建白名单。</p>
+            <p>暂无 ERP 本地白名单记录。请先在“访问白名单”页面创建白名单。</p>
           </div>
           <div className="admin-apps-row-actions">
             <button
@@ -1263,7 +1341,7 @@ function WriteStatusTable({
             <tr>
               <th>授权</th>
               <th>目标系统</th>
-              <th>本地状态</th>
+              <th>ERP 本地状态</th>
               <th>最近写入</th>
               <th>目标响应</th>
               <th>时间</th>
@@ -1463,7 +1541,7 @@ function SystemServiceAuthWriteStatusPanel() {
         <div className="admin-apps-table-header">
           <div>
             <h2>写入与校验记录筛选</h2>
-            <p>按来源系统、目标系统、写入与校验记录或关键字筛选ERP 本地白名单写入与校验记录。</p>
+            <p>按来源系统、目标系统、写入与校验记录或关键字筛选 ERP 本地白名单写入与校验记录。</p>
           </div>
           <div className="admin-apps-toolbar">
             <select value={sourceAppCode} onChange={(event) => setSourceAppCode(event.target.value)}>
