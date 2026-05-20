@@ -16,6 +16,7 @@ import { useSystemServiceAuthPermissions } from "../hooks/useSystemServiceAuthPe
 import { useSystemServiceAuthWriteStatus } from "../hooks/useSystemServiceAuthWriteStatus";
 
 type ActiveFilter = "all" | "active" | "inactive";
+type CapabilityStatusFilter = "all" | "active" | "inactive";
 type WriteStatusFilter = "all" | "success" | "failure" | "pending" | "skipped" | "no-run";
 
 type PermissionDraft = {
@@ -29,6 +30,26 @@ type TargetAppOption = {
   code: string;
   name: string;
 };
+
+const RESOURCE_LABELS: Record<string, string> = {
+  barcodes: "商品条码",
+  fulfillment_ready_orders: "可履约订单",
+  health: "健康检查",
+  iam_snapshot: "权限快照",
+  items: "商品主数据",
+  purchase_orders: "采购单",
+  shipping_records: "物流记录",
+  sku_codes: "SKU 编码",
+  suppliers: "供应商",
+  uoms: "计量单位",
+  warehouses: "仓库",
+};
+
+function resourceText(value: string): string {
+  const label = RESOURCE_LABELS[value];
+
+  return label ? `${label}（${value}）` : value;
+}
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
@@ -57,6 +78,14 @@ function BoolPill({ active }: { active: boolean }) {
   return (
     <span className={active ? "admin-apps-status success" : "admin-apps-status muted"}>
       {active ? "启用" : "停用"}
+    </span>
+  );
+}
+
+function CapabilityStatusPill({ active }: { active: boolean }) {
+  return (
+    <span className={active ? "admin-apps-status success" : "admin-apps-status muted"}>
+      {active ? "提供中" : "已停用"}
     </span>
   );
 }
@@ -120,8 +149,10 @@ function matchesCapabilityKeyword(
     capability.capability_code,
     capability.capability_name,
     capability.resource_code,
+    resourceText(capability.resource_code),
     capability.permission_code,
     capability.description ?? "",
+    capability.is_active ? "提供中" : "已停用",
     routeHaystack,
   ]
     .join(" ")
@@ -317,14 +348,70 @@ function CapabilityRoutes({ routes }: { routes: SystemServiceAuthCapabilityRoute
             {route.http_method} {route.path}
           </div>
           <div>{route.route_name}</div>
-          <div>
-            认证：{route.auth_required ? "需要" : "不需要"}；状态：
-            {route.is_active ? "启用" : "停用"}；同步：
-            {formatDateTime(route.last_synced_at)}
-          </div>
+          <div>系统身份校验：{route.auth_required ? "需要" : "不需要"}</div>
+          <div>接口状态：{route.is_active ? "提供中" : "已停用"}</div>
+          <div>同步时间：{formatDateTime(route.last_synced_at)}</div>
         </div>
       ))}
     </div>
+  );
+}
+
+function CapabilityDirectorySummary({
+  capabilities,
+}: {
+  capabilities: SystemServiceAuthCapabilityDTO[];
+}) {
+  const targetSystemCount = new Set(capabilities.map((capability) => capability.target_app_code)).size;
+  const activeCapabilityCount = capabilities.filter((capability) => capability.is_active).length;
+  const inactiveCapabilityCount = capabilities.length - activeCapabilityCount;
+
+  let routeCount = 0;
+  let authRequiredRouteCount = 0;
+  let inactiveRouteCount = 0;
+
+  for (const capability of capabilities) {
+    routeCount += capability.route_count;
+
+    for (const route of capability.routes) {
+      if (route.auth_required) authRequiredRouteCount += 1;
+      if (!route.is_active) inactiveRouteCount += 1;
+    }
+  }
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-profile-grid">
+        <article className="admin-apps-profile-link">
+          <span>能力总数</span>
+          <strong>{capabilities.length}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>提供中</span>
+          <strong>{activeCapabilityCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>已停用</span>
+          <strong>{inactiveCapabilityCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>目标系统</span>
+          <strong>{targetSystemCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>接口路由</span>
+          <strong>{routeCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>需系统身份</span>
+          <strong>{authRequiredRouteCount}</strong>
+        </article>
+        <article className="admin-apps-profile-link">
+          <span>停用接口</span>
+          <strong>{inactiveRouteCount}</strong>
+        </article>
+      </div>
+    </section>
   );
 }
 
@@ -366,7 +453,7 @@ function CapabilityCatalogTable({
         <div>
           <h2>目标系统能力清单</h2>
           <p>
-            只读展示各目标系统通过 self-description 声明的 service capabilities 和 route mappings。
+            只读展示目标系统声明的能力和接口；能力存在不代表已经授权，谁能调用以访问白名单为准。
           </p>
         </div>
         <div className="admin-apps-row-actions">
@@ -387,9 +474,9 @@ function CapabilityCatalogTable({
             <tr>
               <th>目标系统</th>
               <th>能力</th>
-              <th>权限 / 资源</th>
+              <th>调用权限 / 业务资源</th>
               <th>路由</th>
-              <th>状态</th>
+              <th>能力状态</th>
               <th>同步时间</th>
             </tr>
           </thead>
@@ -407,14 +494,15 @@ function CapabilityCatalogTable({
                 </td>
                 <td>
                   <div>{capability.permission_code}</div>
-                  <div className="admin-apps-muted">resource: {capability.resource_code}</div>
+                  <div className="admin-apps-muted">资源：{resourceText(capability.resource_code)}</div>
+                  <div className="admin-apps-muted">授权配置：访问白名单页</div>
                 </td>
                 <td>
                   <div className="admin-apps-muted">共 {capability.route_count} 条</div>
                   <CapabilityRoutes routes={capability.routes} />
                 </td>
                 <td>
-                  <BoolPill active={capability.is_active} />
+                  <CapabilityStatusPill active={capability.is_active} />
                 </td>
                 <td>
                   <div>{formatDateTime(capability.last_synced_at)}</div>
@@ -434,6 +522,7 @@ function CapabilityCatalogTable({
 function SystemServiceAuthCapabilitiesPanel() {
   const { token, user } = useSessionRuntime();
   const [keyword, setKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState<CapabilityStatusFilter>("all");
 
   const canRead = Boolean(
     user?.permissions.includes("page.erp.system.read") ||
@@ -451,8 +540,14 @@ function SystemServiceAuthCapabilitiesPanel() {
   } = useSystemServiceAuthCapabilities(token);
 
   const filteredCapabilities = useMemo(
-    () => capabilities.filter((capability) => matchesCapabilityKeyword(capability, keyword)),
-    [capabilities, keyword],
+    () =>
+      capabilities.filter((capability) => {
+        if (statusFilter === "active" && !capability.is_active) return false;
+        if (statusFilter === "inactive" && capability.is_active) return false;
+
+        return matchesCapabilityKeyword(capability, keyword);
+      }),
+    [capabilities, keyword, statusFilter],
   );
 
   if (!canRead) {
@@ -473,11 +568,13 @@ function SystemServiceAuthCapabilitiesPanel() {
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
       {loading ? <div className="admin-apps-alert">正在加载能力目录…</div> : null}
 
+      <CapabilityDirectorySummary capabilities={capabilities} />
+
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
           <div>
             <h2>能力目录筛选</h2>
-            <p>按目标系统或关键字查看 ERP 已同步的服务能力声明。</p>
+            <p>按目标系统、能力状态或关键字查看 ERP 已同步的服务能力声明。</p>
           </div>
           <div className="admin-apps-toolbar">
             <select
@@ -490,6 +587,14 @@ function SystemServiceAuthCapabilitiesPanel() {
                   {option.code} · {option.name}
                 </option>
               ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as CapabilityStatusFilter)}
+            >
+              <option value="all">全部状态</option>
+              <option value="active">仅提供中</option>
+              <option value="inactive">仅已停用</option>
             </select>
             <input
               placeholder="搜索能力 / 权限 / 路由"
