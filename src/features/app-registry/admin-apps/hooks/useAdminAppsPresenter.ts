@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  createAdminApp as apiCreateAdminApp,
+  approveRegistrationRequest as apiApproveRegistrationRequest,
+  createRegistrationRequestFromManifest as apiCreateRegistrationRequestFromManifest,
   disableAdminApp as apiDisableAdminApp,
   enableAdminApp as apiEnableAdminApp,
   fetchAdminApps,
+  fetchRegistrationRequests,
+  rejectRegistrationRequest as apiRejectRegistrationRequest,
   syncAdminAppSelfDescription as apiSyncAdminAppSelfDescription,
   updateAdminApp as apiUpdateAdminApp,
 } from "../api/adminAppsApi";
 import type {
-  AdminAppCreatePayload,
   AdminAppDTO,
+  AdminAppRegistrationRequestCreatePayload,
+  AdminAppRegistrationRequestDTO,
+  AdminAppRegistrationReviewPayload,
   AdminAppSelfDescriptionSyncRunDTO,
   AdminAppUpdatePayload,
 } from "../contracts/adminApps";
@@ -21,10 +26,15 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export function useAdminAppsPresenter(token: string | null) {
   const [apps, setApps] = useState<AdminAppDTO[]>([]);
+  const [registrationRequests, setRegistrationRequests] = useState<
+    AdminAppRegistrationRequestDTO[]
+  >([]);
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [loadingRegistrationRequests, setLoadingRegistrationRequests] = useState(false);
+  const [submittingRegistrationRequest, setSubmittingRegistrationRequest] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [syncingCode, setSyncingCode] = useState<string | null>(null);
+  const [reviewingRequestId, setReviewingRequestId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const requireToken = useCallback((): string => {
@@ -56,28 +66,53 @@ export function useAdminAppsPresenter(token: string | null) {
     }
   }, [token]);
 
+  const loadRegistrationRequests = useCallback(async (): Promise<void> => {
+    if (!token) {
+      setRegistrationRequests([]);
+      setError("缺少登录凭证");
+      return;
+    }
+
+    setLoadingRegistrationRequests(true);
+    setError(null);
+
+    try {
+      const response = await fetchRegistrationRequests(token);
+      setRegistrationRequests(Array.isArray(response.requests) ? response.requests : []);
+    } catch (currentError) {
+      setRegistrationRequests([]);
+      setError(errorMessage(currentError, "加载接入申请失败"));
+    } finally {
+      setLoadingRegistrationRequests(false);
+    }
+  }, [token]);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void load();
+      void loadRegistrationRequests();
     }, 0);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [load]);
+  }, [load, loadRegistrationRequests]);
 
-  async function createApp(payload: AdminAppCreatePayload): Promise<void> {
-    setCreating(true);
+  async function createRegistrationRequestFromManifest(
+    payload: AdminAppRegistrationRequestCreatePayload,
+  ): Promise<AdminAppRegistrationRequestDTO> {
+    setSubmittingRegistrationRequest(true);
     setError(null);
 
     try {
-      await apiCreateAdminApp(requireToken(), payload);
-      await load();
+      const result = await apiCreateRegistrationRequestFromManifest(requireToken(), payload);
+      await loadRegistrationRequests();
+      return result;
     } catch (currentError) {
-      setError(errorMessage(currentError, "创建独立系统失败"));
+      setError(errorMessage(currentError, "生成接入申请失败"));
       throw currentError;
     } finally {
-      setCreating(false);
+      setSubmittingRegistrationRequest(false);
     }
   }
 
@@ -98,13 +133,56 @@ export function useAdminAppsPresenter(token: string | null) {
 
   async function syncSelfDescription(code: string): Promise<AdminAppSelfDescriptionSyncRunDTO> {
     setSyncingCode(code);
+    setError(null);
 
     try {
       const result = await apiSyncAdminAppSelfDescription(requireToken(), code);
       await load();
       return result;
+    } catch (currentError) {
+      setError(errorMessage(currentError, "同步自描述失败"));
+      throw currentError;
     } finally {
       setSyncingCode(null);
+    }
+  }
+
+  async function approveRegistrationRequest(
+    requestId: number,
+    payload: AdminAppRegistrationReviewPayload,
+  ): Promise<AdminAppRegistrationRequestDTO> {
+    setReviewingRequestId(requestId);
+    setError(null);
+
+    try {
+      const result = await apiApproveRegistrationRequest(requireToken(), requestId, payload);
+      await loadRegistrationRequests();
+      await load();
+      return result;
+    } catch (currentError) {
+      setError(errorMessage(currentError, "批准接入申请失败"));
+      throw currentError;
+    } finally {
+      setReviewingRequestId(null);
+    }
+  }
+
+  async function rejectRegistrationRequest(
+    requestId: number,
+    payload: AdminAppRegistrationReviewPayload,
+  ): Promise<AdminAppRegistrationRequestDTO> {
+    setReviewingRequestId(requestId);
+    setError(null);
+
+    try {
+      const result = await apiRejectRegistrationRequest(requireToken(), requestId, payload);
+      await loadRegistrationRequests();
+      return result;
+    } catch (currentError) {
+      setError(errorMessage(currentError, "拒绝接入申请失败"));
+      throw currentError;
+    } finally {
+      setReviewingRequestId(null);
     }
   }
 
@@ -140,15 +218,21 @@ export function useAdminAppsPresenter(token: string | null) {
 
   return {
     apps,
+    registrationRequests,
     loading,
-    creating,
+    loadingRegistrationRequests,
+    submittingRegistrationRequest,
     mutating,
     syncingCode,
+    reviewingRequestId,
     error,
     reload: load,
-    createApp,
+    reloadRegistrationRequests: loadRegistrationRequests,
+    createRegistrationRequestFromManifest,
     updateApp,
     syncSelfDescription,
+    approveRegistrationRequest,
+    rejectRegistrationRequest,
     enableApp,
     disableApp,
     setError,

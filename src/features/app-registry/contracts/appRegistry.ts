@@ -1,3 +1,10 @@
+export type AppRegistrationStatus =
+  | "draft"
+  | "pending_review"
+  | "approved"
+  | "rejected"
+  | "suspended";
+
 export type RegisteredApp = {
   code: string;
   name: string;
@@ -7,6 +14,11 @@ export type RegisteredApp = {
   local_web_url: string;
   local_api_url: string;
   status: "ready" | "planned";
+  registration_status?: AppRegistrationStatus;
+  registration_reason?: string | null;
+  submitted_at?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by_user_id?: number | null;
   sort_order: number;
   is_active: boolean;
 };
