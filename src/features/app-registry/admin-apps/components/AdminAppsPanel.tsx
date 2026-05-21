@@ -23,6 +23,12 @@ type OperationStatus = {
   finishedAt: string;
 };
 
+type RowSyncStatus = {
+  level: "info" | "success" | "error";
+  message: string;
+  finishedAt: string;
+};
+
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
@@ -203,6 +209,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
 
   const [keyword, setKeyword] = useState("");
   const [operationStatus, setOperationStatus] = useState<OperationStatus | null>(null);
+  const [syncResultByCode, setSyncResultByCode] = useState<Record<string, RowSyncStatus>>({});
   const [registrationSourceType, setRegistrationSourceType] =
     useState<RegistrationSourceType>("control_base_url");
   const [registrationUrl, setRegistrationUrl] = useState("");
@@ -250,6 +257,16 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
       ...status,
       finishedAt: operationTimeNow(),
     });
+  }
+
+  function setRowSyncResult(code: string, status: Omit<RowSyncStatus, "finishedAt">) {
+    setSyncResultByCode((prev) => ({
+      ...prev,
+      [code]: {
+        ...status,
+        finishedAt: operationTimeNow(),
+      },
+    }));
   }
 
   async function handleCreateRegistrationRequest(event: FormEvent<HTMLFormElement>) {
@@ -315,6 +332,10 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         target: app.name,
         message: disabledReason,
       });
+      setRowSyncResult(app.code, {
+        level: "info",
+        message: disabledReason,
+      });
       return;
     }
 
@@ -324,21 +345,36 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
       target: app.name,
       message: `正在同步 ${app.name} 的 Manifest、页面目录、能力目录和依赖目录…`,
     });
+    setRowSyncResult(app.code, {
+      level: "info",
+      message: "同步中…",
+    });
 
     try {
       const result = await syncSelfDescription(app.code);
+      const level = result.status === "success" ? "success" : "error";
+      const message = formatSyncRunMessage(result);
       setOperationResult({
-        level: result.status === "success" ? "success" : "error",
+        level,
         action: "同步",
         target: app.name,
-        message: formatSyncRunMessage(result),
+        message,
+      });
+      setRowSyncResult(app.code, {
+        level,
+        message,
       });
     } catch (currentError) {
+      const message = errorMessage(currentError, "同步失败");
       setOperationResult({
         level: "error",
         action: "同步",
         target: app.name,
-        message: errorMessage(currentError, "同步失败"),
+        message,
+      });
+      setRowSyncResult(app.code, {
+        level: "error",
+        message,
       });
     }
   }
@@ -535,7 +571,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
             <tbody>
               {registrationRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="admin-apps-empty-cell">
+                  <td colSpan={7} className="admin-apps-empty-cell">
                     暂无接入申请
                   </td>
                 </tr>
@@ -645,6 +681,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                 <th>网关入口</th>
                 <th>接入状态</th>
                 <th>排序</th>
+                <th>同步结果</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -660,6 +697,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                   const isSyncing = syncingCode === app.code;
                   const syncDisabledReason = getSyncDisabledReason(app);
                   const syncDisabled = !canManage || isSyncing || syncDisabledReason !== null;
+                  const syncResult = syncResultByCode[app.code];
 
                   return (
                     <tr key={app.code}>
@@ -680,6 +718,29 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         </span>
                       </td>
                       <td>{app.sort_order}</td>
+                      <td>
+                        {syncResult ? (
+                          <>
+                            <span
+                              className={
+                                syncResult.level === "success"
+                                  ? "admin-apps-status success"
+                                  : "admin-apps-status muted"
+                              }
+                            >
+                              {syncResult.level === "success"
+                                ? "成功"
+                                : syncResult.level === "error"
+                                  ? "失败"
+                                  : "处理中"}
+                            </span>
+                            <div className="admin-apps-muted">{syncResult.message}</div>
+                            <div className="admin-apps-muted">{syncResult.finishedAt}</div>
+                          </>
+                        ) : (
+                          <span className="admin-apps-muted">暂无本次操作</span>
+                        )}
+                      </td>
                       <td>
                         <button
                           type="button"
