@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchAdminApps } from "../../../app-registry/admin-apps/api/adminAppsApi";
+import {
+  fetchAdminApps,
+  syncAdminAppSelfDescription,
+} from "../../../app-registry/admin-apps/api/adminAppsApi";
 import type { AdminAppDTO } from "../../../app-registry/admin-apps/contracts/adminApps";
 import { fetchAdminAppSelfDescription } from "../../../app-registry/api/appSelfDescriptionApi";
 import type { AppSelfDescriptionDTO } from "../../../app-registry/contracts/selfDescription";
@@ -15,6 +18,8 @@ export function usePageCatalogPresenter(token: string | null) {
   const [selfDescription, setSelfDescription] = useState<AppSelfDescriptionDTO | null>(null);
   const [loadingApps, setLoadingApps] = useState(false);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectableApps = useMemo(
@@ -111,6 +116,46 @@ export function usePageCatalogPresenter(token: string | null) {
     };
   }, [loadPageCatalog, selectedAppCode]);
 
+  const syncPageCatalog = useCallback(async (): Promise<void> => {
+    if (!token) {
+      setError("缺少登录凭证");
+      return;
+    }
+
+    if (!selectedAppCode) {
+      setError("请选择系统");
+      return;
+    }
+
+    setSyncing(true);
+    setSyncMessage(null);
+    setError(null);
+
+    try {
+      const result = await syncAdminAppSelfDescription(token, selectedAppCode);
+      await loadPageCatalog(selectedAppCode);
+
+      if (result.status === "success") {
+        setSyncMessage(
+          [
+            "同步完成",
+            `读取 ${result.fetched_count}`,
+            `新增 ${result.inserted_count}`,
+            `更新 ${result.updated_count}`,
+            `删除 ${result.deleted_count}`,
+          ].join("，"),
+        );
+      } else {
+        setSyncMessage(result.error_message ?? result.raw_excerpt ?? "同步未成功");
+      }
+    } catch (currentError) {
+      setSyncMessage(null);
+      setError(errorMessage(currentError, "同步页面目录失败"));
+    } finally {
+      setSyncing(false);
+    }
+  }, [loadPageCatalog, selectedAppCode, token]);
+
   return {
     apps: selectableApps,
     selectedApp,
@@ -118,9 +163,12 @@ export function usePageCatalogPresenter(token: string | null) {
     setSelectedAppCode: setRequestedAppCode,
     selfDescription,
     loading: loadingApps || loadingCatalog,
+    syncing,
+    syncMessage,
     error,
     reloadApps: loadApps,
     reloadPageCatalog: () => loadPageCatalog(selectedAppCode),
+    syncPageCatalog,
   };
 }
 
