@@ -4,6 +4,7 @@ import type {
   UserCreatePayload,
   UserDTO,
   UserPermissionMatrixDTO,
+  UserPermissionMatrixSaveResultDTO,
   UserPermissionMatrixRawDTO,
   UserUpdatePayload,
 } from "../contracts/adminUsers";
@@ -41,8 +42,8 @@ export function updateUserPermissionMatrix(
   userId: number,
   pageCodes: string[],
   pages: PermissionMatrixPagesDTO,
-): Promise<UserDTO> {
-  return apiRequest<UserDTO>(`/admin/users/${userId}/permission-matrix`, {
+): Promise<UserPermissionMatrixSaveResultDTO> {
+  return apiRequest<UserPermissionMatrixSaveResultDTO>(`/admin/users/${userId}/permission-matrix`, {
     method: "PUT",
     token,
     body: {

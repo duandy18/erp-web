@@ -13,6 +13,7 @@ import type {
   PermissionMatrixPageDTO,
   PermissionMatrixPagesDTO,
   PermissionMatrixRowDTO,
+  UserPermissionMatrixSaveResultDTO,
   UserCreatePayload,
   UserDTO,
   UserUpdatePayload,
@@ -120,14 +121,15 @@ export function useAdminUsersPresenter(token: string | null) {
   async function saveUserPermissionMatrix(
     userId: number,
     pages: PermissionMatrixPagesDTO,
-  ): Promise<void> {
+  ): Promise<UserPermissionMatrixSaveResultDTO> {
     setMutating(true);
     setError(null);
 
     try {
       const pageCodes = matrixPages.map((page) => page.page_code);
-      await apiUpdateUserPermissionMatrix(requireToken(), userId, pageCodes, pages);
+      const result = await apiUpdateUserPermissionMatrix(requireToken(), userId, pageCodes, pages);
       await load();
+      return result;
     } catch (currentError) {
       setError(errorMessage(currentError, "保存用户权限失败"));
       throw currentError;
