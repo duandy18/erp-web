@@ -30,9 +30,6 @@ export function AppCard({ app }: AppCardProps) {
           <dt>启停状态</dt>
           <dd>{app.is_active ? "启用" : "停用"}</dd>
         </div>
-        <div>
-          <dt>配置状态</dt>
-        </div>
       </dl>
 
       <a className="button secondary" href={app.web_path}>

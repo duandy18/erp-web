@@ -18,6 +18,7 @@ export type RegisteredApp = {
   reviewed_by_user_id?: number | null;
   sort_order: number;
   is_active: boolean;
+  show_in_my_apps: boolean;
 };
 
 export type RegisteredAppsResponse = {

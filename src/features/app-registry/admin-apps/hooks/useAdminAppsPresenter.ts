@@ -5,7 +5,9 @@ import {
   createRegistrationRequestFromManifest as apiCreateRegistrationRequestFromManifest,
   fetchAdminApps,
   fetchRegistrationRequests,
+  hideAdminAppFromMyApps as apiHideAdminAppFromMyApps,
   rejectRegistrationRequest as apiRejectRegistrationRequest,
+  showAdminAppInMyApps as apiShowAdminAppInMyApps,
   syncAdminAppSelfDescription as apiSyncAdminAppSelfDescription,
 } from "../api/adminAppsApi";
 import type {
@@ -29,6 +31,7 @@ export function useAdminAppsPresenter(token: string | null) {
   const [loadingRegistrationRequests, setLoadingRegistrationRequests] = useState(false);
   const [submittingRegistrationRequest, setSubmittingRegistrationRequest] = useState(false);
   const [syncingCode, setSyncingCode] = useState<string | null>(null);
+  const [visibilityChangingCode, setVisibilityChangingCode] = useState<string | null>(null);
   const [reviewingRequestId, setReviewingRequestId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,6 +130,36 @@ export function useAdminAppsPresenter(token: string | null) {
     }
   }
 
+  async function showAppInMyApps(code: string): Promise<void> {
+    setVisibilityChangingCode(code);
+    setError(null);
+
+    try {
+      await apiShowAdminAppInMyApps(requireToken(), code);
+      await load();
+    } catch (currentError) {
+      setError(errorMessage(currentError, "显示到我的应用失败"));
+      throw currentError;
+    } finally {
+      setVisibilityChangingCode(null);
+    }
+  }
+
+  async function hideAppFromMyApps(code: string): Promise<void> {
+    setVisibilityChangingCode(code);
+    setError(null);
+
+    try {
+      await apiHideAdminAppFromMyApps(requireToken(), code);
+      await load();
+    } catch (currentError) {
+      setError(errorMessage(currentError, "不在我的应用中显示失败"));
+      throw currentError;
+    } finally {
+      setVisibilityChangingCode(null);
+    }
+  }
+
   async function approveRegistrationRequest(
     requestId: number,
     payload: AdminAppRegistrationReviewPayload,
@@ -173,12 +206,15 @@ export function useAdminAppsPresenter(token: string | null) {
     loadingRegistrationRequests,
     submittingRegistrationRequest,
     syncingCode,
+    visibilityChangingCode,
     reviewingRequestId,
     error,
     reload: load,
     reloadRegistrationRequests: loadRegistrationRequests,
     createRegistrationRequestFromManifest,
     syncSelfDescription,
+    showAppInMyApps,
+    hideAppFromMyApps,
     approveRegistrationRequest,
     rejectRegistrationRequest,
     setError,

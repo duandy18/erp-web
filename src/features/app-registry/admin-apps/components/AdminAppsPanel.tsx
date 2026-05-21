@@ -124,6 +124,26 @@ function getSyncDisabledReason(app: AdminAppDTO): string | null {
   return null;
 }
 
+function getMyAppsVisibilityDisabledReason(app: AdminAppDTO): string | null {
+  if (app.code === "erp") {
+    return "ERP 总控平台不作为我的应用卡片展示";
+  }
+
+  if (app.show_in_my_apps) {
+    return null;
+  }
+
+  if ((app.registration_status ?? "approved") !== "approved") {
+    return "只有已批准接入的系统可以显示到我的应用";
+  }
+
+  if (!app.is_active) {
+    return "未启用的系统不能显示到我的应用";
+  }
+
+  return null;
+}
+
 function requireTrimmed(value: string, message: string): string {
   const trimmed = value.trim();
 
@@ -198,12 +218,15 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     loadingRegistrationRequests,
     submittingRegistrationRequest,
     syncingCode,
+    visibilityChangingCode,
     reviewingRequestId,
     error,
     createRegistrationRequestFromManifest,
     approveRegistrationRequest,
     rejectRegistrationRequest,
     syncSelfDescription,
+    showAppInMyApps,
+    hideAppFromMyApps,
     setError,
   } = presenter;
 
@@ -218,6 +241,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
   const summary = useMemo(
     () => ({
       appCount: apps.length,
+      myAppsVisibleCount: apps.filter((app) => app.show_in_my_apps).length,
       approvedCount: apps.filter((app) => (app.registration_status ?? "approved") === "approved")
         .length,
       suspendedCount: apps.filter((app) => app.registration_status === "suspended").length,
@@ -379,6 +403,55 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     }
   }
 
+  async function handleToggleMyAppsVisibility(app: AdminAppDTO) {
+    if (!canManage) return;
+
+    const disabledReason = getMyAppsVisibilityDisabledReason(app);
+    if (disabledReason) {
+      setOperationResult({
+        level: "info",
+        action: "我的应用显示",
+        target: app.name,
+        message: disabledReason,
+      });
+      return;
+    }
+
+    const nextVisible = !app.show_in_my_apps;
+    setOperationResult({
+      level: "info",
+      action: "我的应用显示",
+      target: app.name,
+      message: nextVisible
+        ? `正在将 ${app.name} 显示到我的应用…`
+        : `正在设置 ${app.name} 不在我的应用中显示…`,
+    });
+
+    try {
+      if (nextVisible) {
+        await showAppInMyApps(app.code);
+      } else {
+        await hideAppFromMyApps(app.code);
+      }
+
+      setOperationResult({
+        level: "success",
+        action: "我的应用显示",
+        target: app.name,
+        message: nextVisible
+          ? `已显示到我的应用：${app.name}`
+          : `已设置为不在我的应用中显示：${app.name}`,
+      });
+    } catch (currentError) {
+      setOperationResult({
+        level: "error",
+        action: "我的应用显示",
+        target: app.name,
+        message: errorMessage(currentError, "我的应用显示设置失败"),
+      });
+    }
+  }
+
   async function handleApproveRegistrationRequest(request: AdminAppRegistrationRequestDTO) {
     if (!canManage || request.status !== "pending_review") return;
 
@@ -472,6 +545,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         </div>
         <div className="admin-apps-profile-grid">
           <SummaryCard label="已登记系统" value={summary.appCount} />
+          <SummaryCard label="显示在我的应用" value={summary.myAppsVisibleCount} />
           <SummaryCard label="已批准接入" value={summary.approvedCount} />
           <SummaryCard label="已暂停接入" value={summary.suspendedCount} />
           <SummaryCard label="待审核申请" value={summary.pendingRequestCount} />
@@ -680,6 +754,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                 <th>说明</th>
                 <th>网关入口</th>
                 <th>接入状态</th>
+                <th>是否显示在我的应用</th>
                 <th>排序</th>
                 <th>同步结果</th>
                 <th>操作</th>
@@ -688,7 +763,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
             <tbody>
               {filteredApps.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="admin-apps-empty-cell">
+                  <td colSpan={8} className="admin-apps-empty-cell">
                     暂无符合条件的独立系统
                   </td>
                 </tr>
@@ -698,6 +773,11 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                   const syncDisabledReason = getSyncDisabledReason(app);
                   const syncDisabled = !canManage || isSyncing || syncDisabledReason !== null;
                   const syncResult = syncResultByCode[app.code];
+                  const visibilityDisabledReason = getMyAppsVisibilityDisabledReason(app);
+                  const visibilityDisabled =
+                    !canManage ||
+                    visibilityChangingCode === app.code ||
+                    visibilityDisabledReason !== null;
 
                   return (
                     <tr key={app.code}>
@@ -717,6 +797,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                           {registrationStatusText(app.registration_status)}
                         </span>
                       </td>
+                      <td>{app.show_in_my_apps ? "是" : "否"}</td>
                       <td>{app.sort_order}</td>
                       <td>
                         {syncResult ? (
@@ -742,19 +823,41 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         )}
                       </td>
                       <td>
-                        <button
-                          type="button"
-                          className="admin-apps-button secondary"
-                          disabled={syncDisabled}
-                          title={syncDisabledReason ?? undefined}
-                          onClick={() => {
-                            void handleSync(app);
-                          }}
-                        >
-                          {syncDisabledReason ? "不适用" : isSyncing ? "同步中…" : "同步"}
-                        </button>
+                        <div className="admin-apps-row-actions">
+                          <button
+                            type="button"
+                            className="admin-apps-button secondary"
+                            disabled={syncDisabled}
+                            title={syncDisabledReason ?? undefined}
+                            onClick={() => {
+                              void handleSync(app);
+                            }}
+                          >
+                            {syncDisabledReason ? "不适用" : isSyncing ? "同步中…" : "同步"}
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-apps-button secondary"
+                            disabled={visibilityDisabled}
+                            title={visibilityDisabledReason ?? undefined}
+                            onClick={() => {
+                              void handleToggleMyAppsVisibility(app);
+                            }}
+                          >
+                            {visibilityDisabledReason
+                              ? "不适用"
+                              : visibilityChangingCode === app.code
+                                ? "处理中…"
+                                : app.show_in_my_apps
+                                  ? "不在我的应用中显示"
+                                  : "显示到我的应用"}
+                          </button>
+                        </div>
                         {syncDisabledReason ? (
                           <div className="admin-apps-muted">{syncDisabledReason}</div>
+                        ) : null}
+                        {visibilityDisabledReason ? (
+                          <div className="admin-apps-muted">{visibilityDisabledReason}</div>
                         ) : null}
                       </td>
                     </tr>
