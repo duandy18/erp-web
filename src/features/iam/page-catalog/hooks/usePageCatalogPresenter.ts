@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { fetchAdminApps } from "../admin-apps/api/adminAppsApi";
-import type { AdminAppDTO } from "../admin-apps/contracts/adminApps";
-import { fetchAdminAppSelfDescription } from "../api/appSelfDescriptionApi";
-import type { AppSelfDescriptionDTO } from "../contracts/selfDescription";
+import { fetchAdminApps } from "../../../app-registry/admin-apps/api/adminAppsApi";
+import type { AdminAppDTO } from "../../../app-registry/admin-apps/contracts/adminApps";
+import { fetchAdminAppSelfDescription } from "../../../app-registry/api/appSelfDescriptionApi";
+import type { AppSelfDescriptionDTO } from "../../../app-registry/contracts/selfDescription";
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
 }
 
-export function useAppSelfDescriptionCatalog(token: string | null) {
+export function usePageCatalogPresenter(token: string | null) {
   const [apps, setApps] = useState<AdminAppDTO[]>([]);
-  const [requestedAppCode, setRequestedAppCode] = useState<string>("");
+  const [requestedAppCode, setRequestedAppCode] = useState("");
   const [selfDescription, setSelfDescription] = useState<AppSelfDescriptionDTO | null>(null);
   const [loadingApps, setLoadingApps] = useState(false);
-  const [loadingDescription, setLoadingDescription] = useState(false);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectableApps = useMemo(
@@ -27,13 +27,17 @@ export function useAppSelfDescriptionCatalog(token: string | null) {
       return "";
     }
 
-    const requestedStillExists = selectableApps.some((app) => app.code === requestedAppCode);
-    if (requestedAppCode && requestedStillExists) {
+    if (requestedAppCode && selectableApps.some((app) => app.code === requestedAppCode)) {
       return requestedAppCode;
     }
 
-    return selectableApps[0].code;
+    return selectableApps[0]?.code ?? "";
   }, [requestedAppCode, selectableApps]);
+
+  const selectedApp = useMemo(
+    () => selectableApps.find((app) => app.code === selectedAppCode) ?? null,
+    [selectableApps, selectedAppCode],
+  );
 
   const loadApps = useCallback(async (): Promise<void> => {
     if (!token) {
@@ -58,7 +62,7 @@ export function useAppSelfDescriptionCatalog(token: string | null) {
     }
   }, [token]);
 
-  const loadSelfDescription = useCallback(
+  const loadPageCatalog = useCallback(
     async (appCode: string): Promise<void> => {
       if (!token) {
         setSelfDescription(null);
@@ -71,7 +75,7 @@ export function useAppSelfDescriptionCatalog(token: string | null) {
         return;
       }
 
-      setLoadingDescription(true);
+      setLoadingCatalog(true);
       setError(null);
 
       try {
@@ -79,9 +83,9 @@ export function useAppSelfDescriptionCatalog(token: string | null) {
         setSelfDescription(response);
       } catch (currentError) {
         setSelfDescription(null);
-        setError(errorMessage(currentError, "加载前端页面目录失败，请先同步该系统自描述"));
+        setError(errorMessage(currentError, "加载页面目录失败，请先在独立系统注册页执行同步"));
       } finally {
-        setLoadingDescription(false);
+        setLoadingCatalog(false);
       }
     },
     [token],
@@ -99,22 +103,25 @@ export function useAppSelfDescriptionCatalog(token: string | null) {
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void loadSelfDescription(selectedAppCode);
+      void loadPageCatalog(selectedAppCode);
     }, 0);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [loadSelfDescription, selectedAppCode]);
+  }, [loadPageCatalog, selectedAppCode]);
 
   return {
     apps: selectableApps,
+    selectedApp,
     selectedAppCode,
     setSelectedAppCode: setRequestedAppCode,
     selfDescription,
-    loading: loadingApps || loadingDescription,
+    loading: loadingApps || loadingCatalog,
     error,
     reloadApps: loadApps,
-    reloadSelfDescription: () => loadSelfDescription(selectedAppCode),
+    reloadPageCatalog: () => loadPageCatalog(selectedAppCode),
   };
 }
+
+export type PageCatalogPresenter = ReturnType<typeof usePageCatalogPresenter>;
