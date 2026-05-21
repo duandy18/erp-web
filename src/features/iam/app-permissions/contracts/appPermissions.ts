@@ -20,7 +20,6 @@ export type AppIamMatrixUserDTO = {
 export type AppIamMatrixAppDTO = {
   app_code: string;
   app_name: string;
-  status: string;
   is_active: boolean;
   sort_order: number;
 };
