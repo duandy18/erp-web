@@ -1,5 +1,6 @@
 import { apiRequest } from "../../../../shared/api/httpClient";
 import type {
+  AdminAppDTO,
   AdminAppsResponse,
   AdminAppRegistrationEventDTO,
   AdminAppRegistrationEventsResponse,
@@ -22,6 +23,34 @@ export function syncAdminAppSelfDescription(
 ): Promise<AdminAppSelfDescriptionSyncRunDTO> {
   return apiRequest<AdminAppSelfDescriptionSyncRunDTO>(
     `/admin/app-registry/apps/${encodeURIComponent(code)}/sync-self-description`,
+    {
+      method: "POST",
+      token,
+      body: {},
+    },
+  );
+}
+
+export function showAdminAppInMyApps(
+  token: string,
+  code: string,
+): Promise<AdminAppDTO> {
+  return apiRequest<AdminAppDTO>(
+    `/admin/app-registry/apps/${encodeURIComponent(code)}/show-in-my-apps`,
+    {
+      method: "POST",
+      token,
+      body: {},
+    },
+  );
+}
+
+export function hideAdminAppFromMyApps(
+  token: string,
+  code: string,
+): Promise<AdminAppDTO> {
+  return apiRequest<AdminAppDTO>(
+    `/admin/app-registry/apps/${encodeURIComponent(code)}/hide-from-my-apps`,
     {
       method: "POST",
       token,
