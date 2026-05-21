@@ -4,9 +4,6 @@ type AppCardProps = {
   app: RegisteredApp;
 };
 
-function statusText(status: RegisteredApp["status"]): string {
-  return status === "ready" ? "已就绪" : "规划中";
-}
 
 export function AppCard({ app }: AppCardProps) {
   return (
@@ -16,7 +13,6 @@ export function AppCard({ app }: AppCardProps) {
           <div className="eyebrow">{app.code.toUpperCase()}</div>
           <h3>{app.name}</h3>
         </div>
-        <span className={`status-pill ${app.status}`}>{statusText(app.status)}</span>
       </div>
 
       <p>{app.description}</p>
@@ -36,7 +32,6 @@ export function AppCard({ app }: AppCardProps) {
         </div>
         <div>
           <dt>配置状态</dt>
-          <dd>{statusText(app.status)}</dd>
         </div>
       </dl>
 

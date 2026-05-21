@@ -3,13 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import {
   approveRegistrationRequest as apiApproveRegistrationRequest,
   createRegistrationRequestFromManifest as apiCreateRegistrationRequestFromManifest,
-  disableAdminApp as apiDisableAdminApp,
-  enableAdminApp as apiEnableAdminApp,
   fetchAdminApps,
   fetchRegistrationRequests,
   rejectRegistrationRequest as apiRejectRegistrationRequest,
   syncAdminAppSelfDescription as apiSyncAdminAppSelfDescription,
-  updateAdminApp as apiUpdateAdminApp,
 } from "../api/adminAppsApi";
 import type {
   AdminAppDTO,
@@ -17,7 +14,6 @@ import type {
   AdminAppRegistrationRequestDTO,
   AdminAppRegistrationReviewPayload,
   AdminAppSelfDescriptionSyncRunDTO,
-  AdminAppUpdatePayload,
 } from "../contracts/adminApps";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -32,7 +28,6 @@ export function useAdminAppsPresenter(token: string | null) {
   const [loading, setLoading] = useState(false);
   const [loadingRegistrationRequests, setLoadingRegistrationRequests] = useState(false);
   const [submittingRegistrationRequest, setSubmittingRegistrationRequest] = useState(false);
-  const [mutating, setMutating] = useState(false);
   const [syncingCode, setSyncingCode] = useState<string | null>(null);
   const [reviewingRequestId, setReviewingRequestId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +55,7 @@ export function useAdminAppsPresenter(token: string | null) {
       setApps(Array.isArray(response.apps) ? response.apps : []);
     } catch (currentError) {
       setApps([]);
-      setError(errorMessage(currentError, "加载独立系统列表失败"));
+      setError(errorMessage(currentError, "加载已接入系统失败"));
     } finally {
       setLoading(false);
     }
@@ -116,21 +111,6 @@ export function useAdminAppsPresenter(token: string | null) {
     }
   }
 
-  async function updateApp(code: string, payload: AdminAppUpdatePayload): Promise<void> {
-    setMutating(true);
-    setError(null);
-
-    try {
-      await apiUpdateAdminApp(requireToken(), code, payload);
-      await load();
-    } catch (currentError) {
-      setError(errorMessage(currentError, "更新独立系统失败"));
-      throw currentError;
-    } finally {
-      setMutating(false);
-    }
-  }
-
   async function syncSelfDescription(code: string): Promise<AdminAppSelfDescriptionSyncRunDTO> {
     setSyncingCode(code);
     setError(null);
@@ -140,7 +120,7 @@ export function useAdminAppsPresenter(token: string | null) {
       await load();
       return result;
     } catch (currentError) {
-      setError(errorMessage(currentError, "同步自描述失败"));
+      setError(errorMessage(currentError, "同步失败"));
       throw currentError;
     } finally {
       setSyncingCode(null);
@@ -186,55 +166,21 @@ export function useAdminAppsPresenter(token: string | null) {
     }
   }
 
-  async function enableApp(code: string): Promise<void> {
-    setMutating(true);
-    setError(null);
-
-    try {
-      await apiEnableAdminApp(requireToken(), code);
-      await load();
-    } catch (currentError) {
-      setError(errorMessage(currentError, "启用独立系统失败"));
-      throw currentError;
-    } finally {
-      setMutating(false);
-    }
-  }
-
-  async function disableApp(code: string): Promise<void> {
-    setMutating(true);
-    setError(null);
-
-    try {
-      await apiDisableAdminApp(requireToken(), code);
-      await load();
-    } catch (currentError) {
-      setError(errorMessage(currentError, "停用独立系统失败"));
-      throw currentError;
-    } finally {
-      setMutating(false);
-    }
-  }
-
   return {
     apps,
     registrationRequests,
     loading,
     loadingRegistrationRequests,
     submittingRegistrationRequest,
-    mutating,
     syncingCode,
     reviewingRequestId,
     error,
     reload: load,
     reloadRegistrationRequests: loadRegistrationRequests,
     createRegistrationRequestFromManifest,
-    updateApp,
     syncSelfDescription,
     approveRegistrationRequest,
     rejectRegistrationRequest,
-    enableApp,
-    disableApp,
     setError,
   };
 }

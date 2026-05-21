@@ -6,23 +6,6 @@ export type AdminAppsResponse = {
   apps: AdminAppDTO[];
 };
 
-export type AdminAppStatus = AdminAppDTO["status"];
-
-export type AdminAppUpdatePayload = Partial<
-  Pick<
-    AdminAppDTO,
-    | "name"
-    | "description"
-    | "web_path"
-    | "api_path"
-    | "local_web_url"
-    | "local_api_url"
-    | "status"
-    | "sort_order"
-    | "is_active"
-  >
->;
-
 export type AdminAppSelfDescriptionSyncRunDTO = {
   id: number;
   app_code: string;
@@ -55,9 +38,6 @@ export type AdminAppRegistrationProposedAppDTO = {
   description: string;
   web_path: string;
   api_path: string;
-  local_web_url: string;
-  local_api_url: string;
-  status: AdminAppStatus;
   sort_order: number;
   is_active: boolean;
   control_base_url: string;
