@@ -11,9 +11,6 @@ export type RegisteredApp = {
   description: string;
   web_path: string;
   api_path: string;
-  local_web_url: string;
-  local_api_url: string;
-  status: "ready" | "planned";
   registration_status?: AppRegistrationStatus;
   registration_reason?: string | null;
   submitted_at?: string | null;

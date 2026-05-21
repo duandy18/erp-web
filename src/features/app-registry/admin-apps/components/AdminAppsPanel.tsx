@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 import { useSessionRuntime } from "../../../iam/runtime/useSessionRuntime";
 import type { AppRegistrationStatus } from "../../contracts/appRegistry";
@@ -6,7 +6,6 @@ import type {
   AdminAppDTO,
   AdminAppRegistrationRequestDTO,
   AdminAppSelfDescriptionSyncRunDTO,
-  AdminAppStatus,
 } from "../contracts/adminApps";
 import type { AdminAppsPresenter } from "../hooks/useAdminAppsPresenter";
 
@@ -14,23 +13,21 @@ type AdminAppsPanelProps = {
   presenter: AdminAppsPresenter;
 };
 
-type StatusFilter = "all" | AdminAppStatus;
-type ActiveFilter = "all" | "active" | "inactive";
 type RegistrationSourceType = "control_base_url" | "manifest_url";
 
-type AdminAppDraft = {
-  name: string;
-  description: string;
-  web_path: string;
-  api_path: string;
-  local_web_url: string;
-  local_api_url: string;
-  status: AdminAppStatus;
-  sort_order: string;
-  is_active: boolean;
+type OperationStatus = {
+  level: "info" | "success" | "error";
+  action: string;
+  target: string;
+  message: string;
+  finishedAt: string;
 };
 
-type DraftMap = Record<string, AdminAppDraft>;
+type RowSyncStatus = {
+  level: "info" | "success" | "error";
+  message: string;
+  finishedAt: string;
+};
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback;
@@ -51,8 +48,10 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
-function statusText(status: AdminAppStatus): string {
-  return status === "ready" ? "已就绪" : "规划中";
+function operationTimeNow(): string {
+  return new Date().toLocaleString("zh-CN", {
+    hour12: false,
+  });
 }
 
 function registrationStatusText(status: AppRegistrationStatus | string | undefined): string {
@@ -100,11 +99,11 @@ function validationStatusText(status: string): string {
 
 function formatSyncRunMessage(result: AdminAppSelfDescriptionSyncRunDTO): string {
   if (result.status !== "success") {
-    return result.error_message ?? result.raw_excerpt ?? "自描述同步未成功";
+    return result.error_message ?? result.raw_excerpt ?? "同步未成功";
   }
 
   return [
-    "自描述同步成功",
+    "同步完成",
     `读取 ${result.fetched_count}`,
     `新增 ${result.inserted_count}`,
     `更新 ${result.updated_count}`,
@@ -113,46 +112,16 @@ function formatSyncRunMessage(result: AdminAppSelfDescriptionSyncRunDTO): string
   ].join("，");
 }
 
-function getSelfDescriptionSyncDisabledReason(app: AdminAppDTO): string | null {
+function getSyncDisabledReason(app: AdminAppDTO): string | null {
   if (app.code === "erp") {
-    return "ERP 总控平台不参与业务系统自描述同步";
+    return "ERP 总控平台不参与业务系统同步";
   }
 
   if ((app.registration_status ?? "approved") !== "approved") {
-    return "只有已批准接入的系统可以同步自描述";
+    return "只有已批准接入的系统可以同步";
   }
 
   return null;
-}
-
-function toDraft(app: AdminAppDTO): AdminAppDraft {
-  return {
-    name: app.name,
-    description: app.description,
-    web_path: app.web_path,
-    api_path: app.api_path,
-    local_web_url: app.local_web_url,
-    local_api_url: app.local_api_url,
-    status: app.status,
-    sort_order: String(app.sort_order),
-    is_active: app.is_active,
-  };
-}
-
-function isDraftDirty(app: AdminAppDTO, draft: AdminAppDraft): boolean {
-  const original = toDraft(app);
-
-  return (
-    original.name !== draft.name ||
-    original.description !== draft.description ||
-    original.web_path !== draft.web_path ||
-    original.api_path !== draft.api_path ||
-    original.local_web_url !== draft.local_web_url ||
-    original.local_api_url !== draft.local_api_url ||
-    original.status !== draft.status ||
-    original.sort_order !== draft.sort_order ||
-    original.is_active !== draft.is_active
-  );
 }
 
 function requireTrimmed(value: string, message: string): string {
@@ -160,37 +129,6 @@ function requireTrimmed(value: string, message: string): string {
 
   if (!trimmed) {
     throw new Error(message);
-  }
-
-  return trimmed;
-}
-
-function parseSortOrder(value: string): number {
-  const trimmed = requireTrimmed(value, "请填写排序值");
-  const parsed = Number(trimmed);
-
-  if (!Number.isInteger(parsed)) {
-    throw new Error("排序值必须是整数");
-  }
-
-  return parsed;
-}
-
-function validatePath(value: string, message: string): string {
-  const trimmed = requireTrimmed(value, message);
-
-  if (!trimmed.startsWith("/")) {
-    throw new Error("入口路径必须以 / 开头");
-  }
-
-  return trimmed;
-}
-
-function validateLocalUrl(value: string, message: string): string {
-  const trimmed = requireTrimmed(value, message);
-
-  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
-    throw new Error("本地调试 / 运行地址必须以 http:// 或 https:// 开头");
   }
 
   return trimmed;
@@ -211,6 +149,42 @@ function SummaryCard({
   );
 }
 
+function OperationStatusBar({ status }: { status: OperationStatus | null }) {
+  if (!status) {
+    return (
+      <section className="admin-apps-card">
+        <div className="admin-apps-table-header">
+          <div>
+            <h2>操作状态</h2>
+            <p>暂无操作结果。生成接入申请、批准、拒绝或同步后会在这里显示结果。</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const className =
+    status.level === "error"
+      ? "admin-apps-alert danger"
+      : status.level === "success"
+        ? "admin-apps-alert success"
+        : "admin-apps-alert";
+
+  return (
+    <section className="admin-apps-card">
+      <div className="admin-apps-table-header">
+        <div>
+          <h2>操作状态</h2>
+          <p>
+            {status.action}｜{status.target}｜{status.finishedAt}
+          </p>
+        </div>
+      </div>
+      <div className={className}>{status.message}</div>
+    </section>
+  );
+}
+
 export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
   const { user } = useSessionRuntime();
 
@@ -223,52 +197,27 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     loading,
     loadingRegistrationRequests,
     submittingRegistrationRequest,
-    mutating,
     syncingCode,
     reviewingRequestId,
     error,
     createRegistrationRequestFromManifest,
     approveRegistrationRequest,
     rejectRegistrationRequest,
-    updateApp,
     syncSelfDescription,
-    enableApp,
-    disableApp,
     setError,
   } = presenter;
 
   const [keyword, setKeyword] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
-  const [rowMessage, setRowMessage] = useState<Record<string, string>>({});
-  const [requestMessage, setRequestMessage] = useState<Record<number, string>>({});
-  const [drafts, setDrafts] = useState<DraftMap>({});
-
+  const [operationStatus, setOperationStatus] = useState<OperationStatus | null>(null);
+  const [syncResultByCode, setSyncResultByCode] = useState<Record<string, RowSyncStatus>>({});
   const [registrationSourceType, setRegistrationSourceType] =
     useState<RegistrationSourceType>("control_base_url");
   const [registrationUrl, setRegistrationUrl] = useState("");
   const [registrationReason, setRegistrationReason] = useState("");
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      const next: DraftMap = {};
-
-      for (const app of apps) {
-        next[app.code] = toDraft(app);
-      }
-
-      setDrafts(next);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [apps]);
-
   const summary = useMemo(
     () => ({
       appCount: apps.length,
-      activeCount: apps.filter((app) => app.is_active).length,
       approvedCount: apps.filter((app) => (app.registration_status ?? "approved") === "approved")
         .length,
       suspendedCount: apps.filter((app) => app.registration_status === "suspended").length,
@@ -284,40 +233,38 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
   const filteredApps = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
 
-    return apps.filter((app) => {
-      if (statusFilter !== "all" && app.status !== statusFilter) return false;
-      if (activeFilter === "active" && !app.is_active) return false;
-      if (activeFilter === "inactive" && app.is_active) return false;
-      if (!normalizedKeyword) return true;
+    if (!normalizedKeyword) {
+      return apps;
+    }
 
-      const haystack = [
+    return apps.filter((app) =>
+      [
         app.code,
         app.name,
         app.description,
         app.web_path,
         app.api_path,
-        app.local_web_url,
-        app.local_api_url,
         app.registration_status ?? "",
       ]
         .join(" ")
-        .toLowerCase();
+        .toLowerCase()
+        .includes(normalizedKeyword),
+    );
+  }, [apps, keyword]);
 
-      return haystack.includes(normalizedKeyword);
+  function setOperationResult(status: Omit<OperationStatus, "finishedAt">) {
+    setOperationStatus({
+      ...status,
+      finishedAt: operationTimeNow(),
     });
-  }, [activeFilter, apps, keyword, statusFilter]);
+  }
 
-  function patchDraft(code: string, patch: Partial<AdminAppDraft>) {
-    if (!canManage) return;
-
-    const app = apps.find((item) => item.code === code);
-    if (!app) return;
-
-    setDrafts((prev) => ({
+  function setRowSyncResult(code: string, status: Omit<RowSyncStatus, "finishedAt">) {
+    setSyncResultByCode((prev) => ({
       ...prev,
       [code]: {
-        ...(prev[code] ?? toDraft(app)),
-        ...patch,
+        ...status,
+        finishedAt: operationTimeNow(),
       },
     }));
   }
@@ -330,8 +277,17 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     try {
       const url = requireTrimmed(
         registrationUrl,
-        registrationSourceType === "control_base_url" ? "请填写控制面地址" : "请填写 Manifest URL",
+        registrationSourceType === "control_base_url"
+          ? "请填写接入管理地址"
+          : "请填写 Manifest URL",
       );
+
+      setOperationResult({
+        level: "info",
+        action: "生成接入申请",
+        target: url,
+        message: "正在拉取 Manifest V2 并生成接入申请…",
+      });
 
       const result = await createRegistrationRequestFromManifest(
         registrationSourceType === "control_base_url"
@@ -347,70 +303,79 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
 
       setRegistrationUrl("");
       setRegistrationReason("");
-      setRequestMessage((prev) => ({
-        ...prev,
-        [result.request_id]: `已生成接入申请：${result.requested_app_name}`,
-      }));
-    } catch (currentError) {
-      setError(errorMessage(currentError, "生成接入申请失败"));
-    }
-  }
-
-  async function handleSave(app: AdminAppDTO) {
-    if (!canManage) return;
-
-    const draft = drafts[app.code] ?? toDraft(app);
-
-    try {
-      await updateApp(app.code, {
-        name: requireTrimmed(draft.name, "请填写系统名称"),
-        description: requireTrimmed(draft.description, "请填写系统说明"),
-        web_path: validatePath(draft.web_path, "请填写 Web 入口路径"),
-        api_path: validatePath(draft.api_path, "请填写 API 入口路径"),
-        local_web_url: validateLocalUrl(draft.local_web_url, "请填写本地 Web 调试地址"),
-        local_api_url: validateLocalUrl(draft.local_api_url, "请填写本地 API 运行地址"),
-        status: draft.status,
-        sort_order: parseSortOrder(draft.sort_order),
-        is_active: draft.is_active,
+      setOperationResult({
+        level: "success",
+        action: "生成接入申请",
+        target: result.requested_app_name,
+        message: `已生成接入申请：${result.requested_app_name}`,
       });
-
-      setRowMessage((prev) => ({ ...prev, [app.code]: "独立系统信息已保存" }));
     } catch (currentError) {
-      setRowMessage((prev) => ({
-        ...prev,
-        [app.code]: errorMessage(currentError, "保存失败"),
-      }));
+      const message = errorMessage(currentError, "生成接入申请失败");
+      setOperationResult({
+        level: "error",
+        action: "生成接入申请",
+        target: registrationUrl || "-",
+        message,
+      });
+      setError(message);
     }
   }
 
-  async function handleSyncSelfDescription(app: AdminAppDTO) {
+  async function handleSync(app: AdminAppDTO) {
     if (!canManage) return;
 
-    const disabledReason = getSelfDescriptionSyncDisabledReason(app);
+    const disabledReason = getSyncDisabledReason(app);
     if (disabledReason) {
-      setRowMessage((prev) => ({
-        ...prev,
-        [app.code]: disabledReason,
-      }));
+      setOperationResult({
+        level: "info",
+        action: "同步",
+        target: app.name,
+        message: disabledReason,
+      });
+      setRowSyncResult(app.code, {
+        level: "info",
+        message: disabledReason,
+      });
       return;
     }
 
-    setRowMessage((prev) => ({
-      ...prev,
-      [app.code]: "正在同步自描述…",
-    }));
+    setOperationResult({
+      level: "info",
+      action: "同步",
+      target: app.name,
+      message: `正在同步 ${app.name} 的 Manifest、页面目录、能力目录和依赖目录…`,
+    });
+    setRowSyncResult(app.code, {
+      level: "info",
+      message: "同步中…",
+    });
 
     try {
       const result = await syncSelfDescription(app.code);
-      setRowMessage((prev) => ({
-        ...prev,
-        [app.code]: formatSyncRunMessage(result),
-      }));
+      const level = result.status === "success" ? "success" : "error";
+      const message = formatSyncRunMessage(result);
+      setOperationResult({
+        level,
+        action: "同步",
+        target: app.name,
+        message,
+      });
+      setRowSyncResult(app.code, {
+        level,
+        message,
+      });
     } catch (currentError) {
-      setRowMessage((prev) => ({
-        ...prev,
-        [app.code]: errorMessage(currentError, "同步自描述失败"),
-      }));
+      const message = errorMessage(currentError, "同步失败");
+      setOperationResult({
+        level: "error",
+        action: "同步",
+        target: app.name,
+        message,
+      });
+      setRowSyncResult(app.code, {
+        level: "error",
+        message,
+      });
     }
   }
 
@@ -420,19 +385,30 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     const reason = window.prompt(`确认批准接入「${request.requested_app_name}」？可填写批准说明。`);
     if (reason === null) return;
 
+    setOperationResult({
+      level: "info",
+      action: "批准接入",
+      target: request.requested_app_name,
+      message: "正在批准接入申请…",
+    });
+
     try {
       const result = await approveRegistrationRequest(request.request_id, {
         reason: reason.trim() || undefined,
       });
-      setRequestMessage((prev) => ({
-        ...prev,
-        [request.request_id]: `已批准接入：${result.requested_app_name}`,
-      }));
+      setOperationResult({
+        level: "success",
+        action: "批准接入",
+        target: result.requested_app_name,
+        message: `已批准接入：${result.requested_app_name}`,
+      });
     } catch (currentError) {
-      setRequestMessage((prev) => ({
-        ...prev,
-        [request.request_id]: errorMessage(currentError, "批准接入失败"),
-      }));
+      setOperationResult({
+        level: "error",
+        action: "批准接入",
+        target: request.requested_app_name,
+        message: errorMessage(currentError, "批准接入失败"),
+      });
     }
   }
 
@@ -442,41 +418,30 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
     const reason = window.prompt(`确认拒绝接入「${request.requested_app_name}」？可填写拒绝原因。`);
     if (reason === null) return;
 
+    setOperationResult({
+      level: "info",
+      action: "拒绝接入",
+      target: request.requested_app_name,
+      message: "正在拒绝接入申请…",
+    });
+
     try {
       const result = await rejectRegistrationRequest(request.request_id, {
         reason: reason.trim() || undefined,
       });
-      setRequestMessage((prev) => ({
-        ...prev,
-        [request.request_id]: `已拒绝接入：${result.requested_app_name}`,
-      }));
+      setOperationResult({
+        level: "success",
+        action: "拒绝接入",
+        target: result.requested_app_name,
+        message: `已拒绝接入：${result.requested_app_name}`,
+      });
     } catch (currentError) {
-      setRequestMessage((prev) => ({
-        ...prev,
-        [request.request_id]: errorMessage(currentError, "拒绝接入失败"),
-      }));
-    }
-  }
-
-  async function handleToggleActive(app: AdminAppDTO) {
-    if (!canManage) return;
-
-    const nextAction = app.is_active ? "停用" : "启用";
-    if (!window.confirm(`确认${nextAction}独立系统「${app.name}」？`)) return;
-
-    try {
-      if (app.is_active) {
-        await disableApp(app.code);
-      } else {
-        await enableApp(app.code);
-      }
-
-      setRowMessage((prev) => ({ ...prev, [app.code]: `独立系统已${nextAction}` }));
-    } catch (currentError) {
-      setRowMessage((prev) => ({
-        ...prev,
-        [app.code]: errorMessage(currentError, `${nextAction}失败`),
-      }));
+      setOperationResult({
+        level: "error",
+        action: "拒绝接入",
+        target: request.requested_app_name,
+        message: errorMessage(currentError, "拒绝接入失败"),
+      });
     }
   }
 
@@ -494,7 +459,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
 
       {!canManage ? (
         <div className="admin-apps-alert">
-          当前为只读模式，不能生成接入申请、批准、拒绝、编辑、启用、停用或同步自描述。
+          当前为只读模式，不能生成接入申请、批准、拒绝或同步。
         </div>
       ) : null}
 
@@ -507,7 +472,6 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         </div>
         <div className="admin-apps-profile-grid">
           <SummaryCard label="已登记系统" value={summary.appCount} />
-          <SummaryCard label="启用系统" value={summary.activeCount} />
           <SummaryCard label="已批准接入" value={summary.approvedCount} />
           <SummaryCard label="已暂停接入" value={summary.suspendedCount} />
           <SummaryCard label="待审核申请" value={summary.pendingRequestCount} />
@@ -515,12 +479,17 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         </div>
       </section>
 
+      <OperationStatusBar status={operationStatus} />
+
       {canManage ? (
-        <form className="admin-apps-card admin-apps-create-grid" onSubmit={handleCreateRegistrationRequest}>
+        <form
+          className="admin-apps-card admin-apps-create-grid"
+          onSubmit={handleCreateRegistrationRequest}
+        >
           <div className="admin-apps-form-intro">
             <h2>Manifest 导入接入</h2>
             <p>
-              输入控制面地址或 Manifest URL。ERP 会拉取 Manifest V2，校验通过后生成待审核接入申请。
+              输入接入管理地址或 Manifest URL。ERP 会拉取 Manifest V2，校验通过后生成待审核接入申请。
             </p>
           </div>
 
@@ -528,23 +497,33 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
             <span>导入方式</span>
             <select
               value={registrationSourceType}
-              onChange={(event) => setRegistrationSourceType(event.target.value as RegistrationSourceType)}
+              onChange={(event) =>
+                setRegistrationSourceType(event.target.value as RegistrationSourceType)
+              }
             >
-              <option value="control_base_url">控制面地址</option>
+              <option value="control_base_url">接入管理地址</option>
               <option value="manifest_url">Manifest URL</option>
             </select>
           </label>
 
           <label className="admin-apps-wide">
-            <span>{registrationSourceType === "control_base_url" ? "控制面地址" : "Manifest URL"}</span>
+            <span>
+              {registrationSourceType === "control_base_url" ? "接入管理地址" : "Manifest URL"}
+            </span>
             <input
               placeholder={
                 registrationSourceType === "control_base_url"
                   ? "http://127.0.0.1:8025"
                   : "http://127.0.0.1:8025/system/read/v1/app-manifest"
               }
+              type="url"
+              autoComplete="off"
+              spellCheck={false}
               value={registrationUrl}
-              onChange={(event) => setRegistrationUrl(event.target.value)}
+              onKeyDownCapture={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onInput={(event) => setRegistrationUrl(event.currentTarget.value)}
+              onChange={(event) => setRegistrationUrl(event.currentTarget.value)}
             />
           </label>
 
@@ -592,14 +571,15 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
             <tbody>
               {registrationRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="admin-apps-empty-cell">
+                  <td colSpan={7} className="admin-apps-empty-cell">
                     暂无接入申请
                   </td>
                 </tr>
               ) : (
                 registrationRequests.map((request) => {
                   const isReviewing = reviewingRequestId === request.request_id;
-                  const canReview = canManage && request.status === "pending_review" && reviewingRequestId === null;
+                  const canReview =
+                    canManage && request.status === "pending_review" && reviewingRequestId === null;
 
                   return (
                     <tr key={request.request_id}>
@@ -609,7 +589,7 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         <div className="admin-apps-muted">{request.requested_app_description}</div>
                       </td>
                       <td>
-                        <div className="admin-apps-muted">控制面</div>
+                        <div className="admin-apps-muted">接入管理地址</div>
                         <div>{request.control_base_url}</div>
                         <div className="admin-apps-muted">Manifest</div>
                         <div>{request.manifest_url}</div>
@@ -625,7 +605,9 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                           {validationStatusText(request.validation_status)}
                         </span>
                         {request.validation_errors.length > 0 ? (
-                          <div className="admin-apps-muted">{request.validation_errors.join("；")}</div>
+                          <div className="admin-apps-muted">
+                            {request.validation_errors.join("；")}
+                          </div>
                         ) : null}
                       </td>
                       <td>{requestStatusText(request.status)}</td>
@@ -662,9 +644,6 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
                         {request.review_reason ? (
                           <div className="admin-apps-muted">审核说明：{request.review_reason}</div>
                         ) : null}
-                        {requestMessage[request.request_id] ? (
-                          <div className="admin-apps-muted">{requestMessage[request.request_id]}</div>
-                        ) : null}
                       </td>
                     </tr>
                   );
@@ -679,34 +658,15 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
         <div className="admin-apps-table-header">
           <div>
             <h2>已接入系统</h2>
-            <p>
-              这里维护已接入系统的入口路径、本地运行配置、启停状态和自描述同步。新增系统必须先走
-              Manifest 接入申请。
-            </p>
+            <p>已接入系统只展示 ERP 注册信息。运行地址、管理接口和构建信息以 Manifest V2 为准。</p>
           </div>
 
           <div className="admin-apps-toolbar">
             <input
-              placeholder="搜索编码 / 名称 / 入口路径 / 本地运行地址"
+              placeholder="搜索编码 / 名称 / 入口路径"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
-            <select
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}
-            >
-              <option value="all">全部状态</option>
-              <option value="ready">已就绪</option>
-              <option value="planned">规划中</option>
-            </select>
-            <select
-              value={activeFilter}
-              onChange={(event) => setActiveFilter(event.target.value as ActiveFilter)}
-            >
-              <option value="all">全部启停</option>
-              <option value="active">仅启用</option>
-              <option value="inactive">仅停用</option>
-            </select>
           </div>
         </div>
 
@@ -718,180 +678,83 @@ export function AdminAppsPanel({ presenter }: AdminAppsPanelProps) {
               <tr>
                 <th>系统</th>
                 <th>说明</th>
-                <th>统一入口</th>
-                <th>本地运行配置</th>
+                <th>网关入口</th>
                 <th>接入状态</th>
-                <th>系统状态</th>
                 <th>排序</th>
-                <th>启停</th>
+                <th>同步结果</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredApps.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="admin-apps-empty-cell">
+                  <td colSpan={6} className="admin-apps-empty-cell">
                     暂无符合条件的独立系统
                   </td>
                 </tr>
               ) : (
                 filteredApps.map((app) => {
-                  const draft = drafts[app.code] ?? toDraft(app);
-                  const dirty = isDraftDirty(app, draft);
                   const isSyncing = syncingCode === app.code;
-                  const syncDisabledReason = getSelfDescriptionSyncDisabledReason(app);
-                  const syncDisabled =
-                    !canManage || mutating || isSyncing || syncDisabledReason !== null;
+                  const syncDisabledReason = getSyncDisabledReason(app);
+                  const syncDisabled = !canManage || isSyncing || syncDisabledReason !== null;
+                  const syncResult = syncResultByCode[app.code];
 
                   return (
                     <tr key={app.code}>
                       <td>
+                        <div>{app.name}</div>
                         <div className="admin-apps-code">{app.code}</div>
-                        <input
-                          value={draft.name}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) => patchDraft(app.code, { name: event.target.value })}
-                        />
                       </td>
+                      <td>{app.description}</td>
                       <td>
-                        <textarea
-                          value={draft.description}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { description: event.target.value })
-                          }
-                        />
-                      </td>
-                      <td>
-                        <div className="admin-apps-muted">Web 入口路径</div>
-                        <input
-                          value={draft.web_path}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { web_path: event.target.value })
-                          }
-                        />
-                        <div className="admin-apps-muted">API 入口路径</div>
-                        <input
-                          value={draft.api_path}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { api_path: event.target.value })
-                          }
-                        />
-                      </td>
-                      <td>
-                        <div className="admin-apps-muted">本地 Web 调试地址</div>
-                        <input
-                          value={draft.local_web_url}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { local_web_url: event.target.value })
-                          }
-                        />
-                        <div className="admin-apps-muted">本地 API 运行地址</div>
-                        <input
-                          value={draft.local_api_url}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { local_api_url: event.target.value })
-                          }
-                        />
+                        <div className="admin-apps-muted">Web</div>
+                        <div>{app.web_path}</div>
+                        <div className="admin-apps-muted">API</div>
+                        <div>{app.api_path}</div>
                       </td>
                       <td>
                         <span className="admin-apps-status success">
                           {registrationStatusText(app.registration_status)}
                         </span>
                       </td>
+                      <td>{app.sort_order}</td>
                       <td>
-                        <select
-                          value={draft.status}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { status: event.target.value as AdminAppStatus })
-                          }
+                        {syncResult ? (
+                          <>
+                            <span
+                              className={
+                                syncResult.level === "success"
+                                  ? "admin-apps-status success"
+                                  : "admin-apps-status muted"
+                              }
+                            >
+                              {syncResult.level === "success"
+                                ? "成功"
+                                : syncResult.level === "error"
+                                  ? "失败"
+                                  : "处理中"}
+                            </span>
+                            <div className="admin-apps-muted">{syncResult.message}</div>
+                            <div className="admin-apps-muted">{syncResult.finishedAt}</div>
+                          </>
+                        ) : (
+                          <span className="admin-apps-muted">暂无本次操作</span>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="admin-apps-button secondary"
+                          disabled={syncDisabled}
+                          title={syncDisabledReason ?? undefined}
+                          onClick={() => {
+                            void handleSync(app);
+                          }}
                         >
-                          <option value="ready">已就绪</option>
-                          <option value="planned">规划中</option>
-                        </select>
-                        <div className="admin-apps-muted">当前：{statusText(app.status)}</div>
-                      </td>
-                      <td>
-                        <input
-                          value={draft.sort_order}
-                          disabled={!canManage || mutating || isSyncing}
-                          onChange={(event) =>
-                            patchDraft(app.code, { sort_order: event.target.value })
-                          }
-                        />
-                      </td>
-                      <td>
-                        <label className="admin-apps-check">
-                          <input
-                            type="checkbox"
-                            checked={draft.is_active}
-                            disabled={!canManage || mutating || isSyncing}
-                            onChange={(event) =>
-                              patchDraft(app.code, { is_active: event.target.checked })
-                            }
-                          />
-                          <span>{draft.is_active ? "启用" : "停用"}</span>
-                        </label>
-                        <span
-                          className={
-                            app.is_active
-                              ? "admin-apps-status success"
-                              : "admin-apps-status muted"
-                          }
-                        >
-                          当前：{app.is_active ? "启用" : "停用"}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="admin-apps-row-actions">
-                          <button
-                            type="button"
-                            className="admin-apps-button secondary"
-                            disabled={!canManage || mutating || isSyncing || !dirty}
-                            onClick={() => {
-                              void handleSave(app);
-                            }}
-                          >
-                            保存
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-apps-button secondary"
-                            disabled={syncDisabled}
-                            title={syncDisabledReason ?? undefined}
-                            onClick={() => {
-                              void handleSyncSelfDescription(app);
-                            }}
-                          >
-                            {syncDisabledReason
-                              ? "不可同步"
-                              : isSyncing
-                                ? "同步中…"
-                                : "同步自描述"}
-                          </button>
-                          <button
-                            type="button"
-                            className="admin-apps-button secondary"
-                            disabled={!canManage || mutating || isSyncing}
-                            onClick={() => {
-                              void handleToggleActive(app);
-                            }}
-                          >
-                            {app.is_active ? "停用" : "启用"}
-                          </button>
-                        </div>
-
+                          {syncDisabledReason ? "不适用" : isSyncing ? "同步中…" : "同步"}
+                        </button>
                         {syncDisabledReason ? (
                           <div className="admin-apps-muted">{syncDisabledReason}</div>
-                        ) : null}
-                        {dirty ? <div className="admin-apps-muted">本行有未保存修改</div> : null}
-                        {rowMessage[app.code] ? (
-                          <div className="admin-apps-muted">{rowMessage[app.code]}</div>
                         ) : null}
                       </td>
                     </tr>
