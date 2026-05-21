@@ -220,7 +220,7 @@ export function AppPermissionsPage() {
                       </button>
                       <div className="admin-apps-muted">{emptyText(item.full_name)}</div>
                       <div className="admin-apps-muted">
-                        {item.is_active ? "启用" : "停用"} · user #{item.user_id}
+                        {item.is_active ? "账号有效" : "账号无效"} · user #{item.user_id}
                       </div>
                     </td>
                   </tr>
@@ -273,7 +273,8 @@ export function AppPermissionsPage() {
                       </button>
 
                       <div className="admin-apps-muted">
-                        {app.app_code} · {app.status} · {app.is_active ? "启用" : "停用"}
+                        系统编码：{app.app_code} · 授权状态：
+                        {accessDraft[app.app_code] ? "已授权" : "未授权"}
                       </div>
                     </td>
                   </tr>
@@ -312,8 +313,8 @@ export function AppPermissionsPage() {
                 <tr>
                   <th>页面</th>
                   <th>路由</th>
-                  <th>读</th>
-                  <th>写</th>
+                  <th>读权限</th>
+                  <th>写权限</th>
                 </tr>
               </thead>
               <tbody>
