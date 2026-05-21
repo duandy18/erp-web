@@ -36,7 +36,7 @@ function formatDateTime(value: string | null | undefined): string {
 function BoolPill({ active }: { active: boolean }) {
   return (
     <span className={active ? "admin-apps-status success" : "admin-apps-status muted"}>
-      {active ? "启用" : "停用"}
+      {active ? "是" : "否"}
     </span>
   );
 }
@@ -78,6 +78,9 @@ export function PageCatalogPage() {
     loading,
     error,
     reloadPageCatalog,
+    syncPageCatalog,
+    syncing,
+    syncMessage,
   } = usePageCatalogPresenter(token);
 
   const [keyword, setKeyword] = useState("");
@@ -158,6 +161,8 @@ export function PageCatalogPage() {
 
       {error ? <div className="admin-apps-alert danger">{error}</div> : null}
       {loading ? <div className="admin-apps-alert">正在加载页面目录…</div> : null}
+      {syncing ? <div className="admin-apps-alert">正在从源系统同步页面目录…</div> : null}
+      {syncMessage ? <div className="admin-apps-alert success">{syncMessage}</div> : null}
 
       <section className="admin-apps-card">
         <div className="admin-apps-table-header">
@@ -185,19 +190,30 @@ export function PageCatalogPage() {
             <button
               type="button"
               className="admin-apps-button secondary"
-              disabled={!selectedAppCode || loading}
+              disabled={!selectedAppCode || loading || syncing}
               onClick={() => {
                 void reloadPageCatalog();
               }}
             >
               刷新
             </button>
+
+            <button
+              type="button"
+              className="admin-apps-button primary"
+              disabled={!selectedAppCode || loading || syncing}
+              onClick={() => {
+                void syncPageCatalog();
+              }}
+            >
+              {syncing ? "同步中…" : "同步"}
+            </button>
           </div>
         </div>
 
         <div className="admin-apps-profile-grid">
           <SummaryCard label="页面总数" value={summary.pageCount} />
-          <SummaryCard label="启用页面" value={summary.activePageCount} />
+          <SummaryCard label="有效页面" value={summary.activePageCount} />
           <SummaryCard label="一级页面" value={summary.level1Count} />
           <SummaryCard label="二级页面" value={summary.level2Count} />
           <SummaryCard label="三级页面" value={summary.level3Count} />
@@ -226,9 +242,9 @@ export function PageCatalogPage() {
               value={activeFilter}
               onChange={(event) => setActiveFilter(event.target.value as ActiveFilter)}
             >
-              <option value="all">全部启停</option>
-              <option value="active">仅启用</option>
-              <option value="inactive">仅停用</option>
+              <option value="all">全部有效状态</option>
+              <option value="active">仅有效</option>
+              <option value="inactive">仅无效</option>
             </select>
 
             <select
@@ -253,7 +269,7 @@ export function PageCatalogPage() {
                 <th>层级</th>
                 <th>读权限</th>
                 <th>写权限</th>
-                <th>启用</th>
+                <th>是否有效</th>
                 <th>排序</th>
                 <th>同步时间</th>
               </tr>
