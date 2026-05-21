@@ -39,6 +39,13 @@ export type UserPermissionMatrixDTO = {
   rows: PermissionMatrixRowDTO[];
 };
 
+export type UserPermissionMatrixSaveResultDTO = {
+  status: "success";
+  message: string;
+  user_id: number;
+  saved_at: string;
+};
+
 export type UserCreatePayload = {
   username: string;
   password: string;

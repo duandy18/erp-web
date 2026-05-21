@@ -11,6 +11,12 @@ import { useSessionRuntime } from "../runtime/useSessionRuntime";
 
 type MatrixDraftMap = Record<number, PermissionMatrixPagesDTO>;
 
+type RowSaveResult = {
+  status: "success" | "failure";
+  message: string;
+  finishedAt: string;
+};
+
 function getCell(pages: PermissionMatrixPagesDTO | undefined, pageCode: string) {
   const cell = pages?.[pageCode];
 
@@ -50,6 +56,35 @@ function SummaryCard({ label, value }: { label: string; value: number | string }
   );
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "暂无";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString("zh-CN", {
+    hour12: false,
+  });
+}
+
+function operationTimeNow(): string {
+  return new Date().toLocaleString("zh-CN", {
+    hour12: false,
+  });
+}
+
+function saveResultClassName(result: RowSaveResult): string {
+  return result.status === "success" ? "admin-users-status success" : "admin-users-status muted";
+}
+
 export function ErpPermissionsPage() {
   const { token, user, refresh } = useSessionRuntime();
   const presenter = useAdminUsersPresenter(token);
@@ -58,7 +93,7 @@ export function ErpPermissionsPage() {
 
   const { error, loading, matrixPages, matrixRows, mutating, saveUserPermissionMatrix } = presenter;
   const [drafts, setDrafts] = useState<MatrixDraftMap>({});
-  const [rowMessage, setRowMessage] = useState<Record<number, string>>({});
+  const [rowSaveResult, setRowSaveResult] = useState<Record<number, RowSaveResult>>({});
 
   const pageCodes = useMemo(() => matrixPages.map((page) => page.page_code), [matrixPages]);
 
@@ -77,9 +112,13 @@ export function ErpPermissionsPage() {
 
     const row = matrixRows.find((item) => item.user_id === userId);
     if (row && isProtectedSelfSystemCell(row, pageCode)) {
-      setRowMessage((prev) => ({
+      setRowSaveResult((prev) => ({
         ...prev,
-        [userId]: "当前登录用户自己的系统管理权限不能在前端取消。",
+        [userId]: {
+          status: "failure",
+          message: "当前登录用户自己的系统管理权限不能在前端取消。",
+          finishedAt: operationTimeNow(),
+        },
       }));
       return;
     }
@@ -124,21 +163,43 @@ export function ErpPermissionsPage() {
     if (isCurrentUser(row)) {
       const systemCell = getCell(draft, "erp.system");
       if (!systemCell.read || !systemCell.write) {
-        setRowMessage((prev) => ({
+        setRowSaveResult((prev) => ({
           ...prev,
-          [row.user_id]: "当前登录用户自己的系统管理读写权限不能取消。",
+          [row.user_id]: {
+            status: "failure",
+            message: "当前登录用户自己的系统管理读写权限不能取消。",
+            finishedAt: operationTimeNow(),
+          },
         }));
         return;
       }
     }
 
-    await saveUserPermissionMatrix(row.user_id, draft);
+    try {
+      const result = await saveUserPermissionMatrix(row.user_id, draft);
 
-    if (isCurrentUser(row)) {
-      await refresh();
+      if (isCurrentUser(row)) {
+        await refresh();
+      }
+
+      setRowSaveResult((prev) => ({
+        ...prev,
+        [row.user_id]: {
+          status: "success",
+          message: result.message,
+          finishedAt: formatDateTime(result.saved_at),
+        },
+      }));
+    } catch (currentError) {
+      setRowSaveResult((prev) => ({
+        ...prev,
+        [row.user_id]: {
+          status: "failure",
+          message: errorMessage(currentError, "保存 ERP 权限失败"),
+          finishedAt: operationTimeNow(),
+        },
+      }));
     }
-
-    setRowMessage((prev) => ({ ...prev, [row.user_id]: "ERP 权限已保存" }));
   }
 
   if (!canRead) {
@@ -191,12 +252,14 @@ export function ErpPermissionsPage() {
                     <div className="admin-users-muted">{page.page_code}</div>
                   </th>
                 ))}
+                <th>保存结果</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {matrixRows.map((row) => {
                 const draft = normalizePages(drafts[row.user_id] ?? row.pages, pageCodes);
+                const saveResult = rowSaveResult[row.user_id];
 
                 return (
                   <tr key={row.user_id}>
@@ -239,6 +302,20 @@ export function ErpPermissionsPage() {
                     })}
 
                     <td>
+                      {saveResult ? (
+                        <>
+                          <span className={saveResultClassName(saveResult)}>
+                            {saveResult.status === "success" ? "保存成功" : "保存失败"}
+                          </span>
+                          <div className="admin-users-muted">{saveResult.message}</div>
+                          <div className="admin-users-muted">{saveResult.finishedAt}</div>
+                        </>
+                      ) : (
+                        <span className="admin-users-muted">-</span>
+                      )}
+                    </td>
+
+                    <td>
                       <button
                         className="admin-users-button secondary"
                         disabled={!canManage || mutating}
@@ -247,12 +324,8 @@ export function ErpPermissionsPage() {
                           void handleSave(row);
                         }}
                       >
-                        保存 ERP 权限
+                        {mutating ? "保存中…" : "保存 ERP 权限"}
                       </button>
-
-                      {rowMessage[row.user_id] ? (
-                        <div className="admin-users-muted">{rowMessage[row.user_id]}</div>
-                      ) : null}
                     </td>
                   </tr>
                 );
@@ -260,7 +333,7 @@ export function ErpPermissionsPage() {
 
               {matrixRows.length === 0 ? (
                 <tr>
-                  <td className="admin-users-empty-cell" colSpan={matrixPages.length + 2}>
+                  <td className="admin-users-empty-cell" colSpan={matrixPages.length + 3}>
                     暂无用户权限矩阵
                   </td>
                 </tr>
